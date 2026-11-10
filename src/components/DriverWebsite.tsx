@@ -1080,19 +1080,6 @@ export const DriverWebsite: React.FC = () => {
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-600/15 rounded-full blur-3xl pointer-events-none"></div>
 
-        {/* Top Floating Controls */}
-        <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-          <a
-            href="https://sjttarvels.vercel.app/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-xs font-bold text-slate-300 border border-slate-700/80 transition shadow cursor-pointer flex items-center gap-1.5"
-          >
-            <Monitor className="w-3.5 h-3.5 text-blue-400" />
-            <span>Customer Website</span>
-          </a>
-        </div>
-
         {/* Central Authentication Modal Container */}
         <div className="w-full max-w-xl bg-slate-900/90 backdrop-blur-xl border border-blue-500/30 rounded-3xl shadow-2xl p-6 sm:p-8 relative z-10 animate-fade-in my-6">
           {/* Header & 3D Logo */}
@@ -1888,6 +1875,19 @@ export const DriverWebsite: React.FC = () => {
             </div>
           )}
 
+
+          {/* Bottom Card Navigation */}
+          <div className="pt-4 mt-6 border-t border-slate-800 text-center">
+            <a
+              href="https://sjttarvels.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-400 hover:text-blue-300 font-bold hover:underline inline-flex items-center gap-1.5"
+            >
+              <Monitor className="w-3.5 h-3.5" />
+              <span>🌐 SJT Cabs Customer Website</span>
+            </a>
+          </div>
 
         </div>
       </div>
