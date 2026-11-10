@@ -53,9 +53,9 @@ import {
 import { exportToExcel, printSectionTable } from '../utils/exportUtils';
 import { TripType } from '../types';
 
-const DRIVER_API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined'
+const DRIVER_API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? `${window.location.protocol}//${window.location.hostname}:5000`
-  : 'http://localhost:5000');
+  : '');
 
 // Predefined Verified SJT Chauffeurs for 1-Click Instant Login
 const PRESET_CHAUFFEURS = [
@@ -213,10 +213,10 @@ export const DriverWebsite: React.FC = () => {
     return driverMode === 'COMPANY_DUTY' ? 'SHIFTS' : 'TRIPS';
   });
 
-  // Chauffeur Authentication & Gateway State
+  // Chauffeur Authentication & Gateway State: defaults to TRUE so the login screen appears directly
   const [showAuthGate, setShowAuthGate] = useState<boolean>(() => {
     const remembered = localStorage.getItem('sjt_driver_logged_in');
-    return !remembered && currentUser?.role !== 'DRIVER';
+    return remembered !== 'true';
   });
   const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP' | 'STATUS'>('LOGIN');
 
@@ -1082,14 +1082,15 @@ export const DriverWebsite: React.FC = () => {
 
         {/* Top Floating Controls */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-          <button
-            type="button"
-            onClick={() => setActiveView('CUSTOMER_WEB')}
+          <a
+            href="https://sjttarvels.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
             className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-xs font-bold text-slate-300 border border-slate-700/80 transition shadow cursor-pointer flex items-center gap-1.5"
           >
             <Monitor className="w-3.5 h-3.5 text-blue-400" />
             <span>Customer Website</span>
-          </button>
+          </a>
         </div>
 
         {/* Central Authentication Modal Container */}
@@ -2000,14 +2001,16 @@ export const DriverWebsite: React.FC = () => {
               </button>
 
               {/* Customer Web Switcher */}
-              <button
-                type="button"
-                onClick={() => setActiveView('CUSTOMER_WEB')}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-all cursor-pointer"
+              <a
+                href="https://sjttarvels.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
                 title="Open Customer Website"
               >
-                <Monitor className="w-3.5 h-3.5" />
-              </button>
+                <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                <span className="hidden md:inline">Customer Website</span>
+              </a>
             </div>
           </div>
 
@@ -3917,9 +3920,9 @@ export const DriverWebsite: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>© 2026 Sharanajyoti Tours & Travels Pvt. Ltd. • Chauffeur & Commercial Fleet Operating System</span>
           <div className="flex items-center gap-3">
-            <button onClick={() => setActiveView('CUSTOMER_WEB')} className="text-blue-400 hover:underline">
+            <a href="https://sjttarvels.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
               Customer Website
-            </button>
+            </a>
           </div>
         </div>
       </footer>

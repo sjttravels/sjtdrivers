@@ -60,8 +60,7 @@ const MainContent: React.FC = () => {
       </div>
 
       <main className="flex-1">
-        {activeView === 'DRIVER_WEB' && <DriverWebsite />}
-        {activeView === 'DRIVER_APP' && <DriverPortal />}
+        {activeView === 'DRIVER_APP' ? <DriverPortal /> : <DriverWebsite />}
       </main>
 
       {/* Driver Modals */}

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 
-const DRIVER_API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined'
+const DRIVER_API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? `${window.location.protocol}//${window.location.hostname}:5000`
-  : 'http://localhost:5000');
+  : '');
 import { 
   Car, 
   MapPin, 
@@ -817,24 +817,30 @@ export const DriverPortal: React.FC = () => {
                 {bezelMode ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
                 <span>{bezelMode ? 'Full Width' : 'Phone Frame'}</span>
               </button>
-              <button
-                onClick={() => setActiveView('CUSTOMER_MOBILE')}
+              <a
+                href="https://sjttarvels.vercel.app/#app"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
               >
                 User App (14 Slides)
-              </button>
-              <button
-                onClick={() => setActiveView('CUSTOMER_WEB')}
+              </a>
+              <a
+                href="https://sjttarvels.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
               >
                 Website Booking
-              </button>
-              <button
-                onClick={() => setActiveView('ADMIN_PANEL')}
+              </a>
+              <a
+                href="https://sjtadmin.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white transition-colors"
               >
                 Admin Accounts
-              </button>
+              </a>
             </div>
           </div>
 
