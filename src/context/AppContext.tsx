@@ -15,6 +15,7 @@ import {
   CompanyTransaction,
   AccountsSummary
 } from '../types';
+import { getDefaultInductionDocuments } from '../utils/documentSamples';
 
 export type AppView = 
   | 'SHOWCASE' 
@@ -334,6 +335,7 @@ const DEFAULT_INDUCTION_APPLICATIONS: DriverKycApplication[] = [
       tool_kit: true
     },
     
+    documents: getDefaultInductionDocuments('Anand Gowda', 'KA 05 AU 1234'),
     kyc_status: 'PENDING',
     submitted_at: '2026-11-14 10:30 AM',
     address: 'Nagasandra BGS Layout, Bengaluru, Karnataka 560073'

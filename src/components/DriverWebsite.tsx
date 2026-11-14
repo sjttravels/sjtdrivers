@@ -48,10 +48,14 @@ import {
   Repeat,
   ArrowLeftRight,
   FileCheck,
-  Info
+  Info,
+  Camera,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { exportToExcel, printSectionTable } from '../utils/exportUtils';
 import { TripType, DriverKycApplication } from '../types';
+import { getDefaultInductionDocuments } from '../utils/documentSamples';
 
 const DRIVER_API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? `${window.location.protocol}//${window.location.hostname}:5000`
@@ -252,12 +256,143 @@ export const DriverWebsite: React.FC = () => {
   const [regColor, setRegColor] = useState('Yellow Board / White');
   const [regSeats, setRegSeats] = useState('17');
   const [regBaseArea, setRegBaseArea] = useState('Bengaluru Commercial Belt');
-  const [regDocs, setRegDocs] = useState<Record<string, { file_name: string; data?: string; expires_at?: string }>>({});
+  const [regDocs, setRegDocs] = useState<Record<string, { file_name: string; data?: string; expires_at?: string; status?: 'APPROVED' | 'PENDING' | 'REJECTED' }>>({});
+  const [previewingImage, setPreviewingImage] = useState<{ title: string; url: string } | null>(null);
   const [regPassword, setRegPassword] = useState('anand1234');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState('');
   const [submittedKycResult, setSubmittedKycResult] = useState<any | null>(null);
+
+  const handleFileUpload = (docKey: string, file: File) => {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert('File size exceeds 8 MB limit. Please select a smaller photo or document.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const dataUri = reader.result;
+        setRegDocs(prev => ({
+          ...prev,
+          [docKey]: {
+            file_name: file.name,
+            data: dataUri,
+            status: 'PENDING'
+          }
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveDoc = (docKey: string) => {
+    setRegDocs(prev => {
+      const next = { ...prev };
+      delete next[docKey];
+      return next;
+    });
+  };
+
+  const renderDocUploadField = (
+    docKey: string, 
+    title: string, 
+    sampleFileName: string, 
+    hint?: string,
+    required = false
+  ) => {
+    const currentDoc = regDocs[docKey];
+    return (
+      <div className="mt-2 p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-slate-300 text-[11px] flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5 text-blue-400" />
+            <span>{title}</span>
+            {required && <span className="text-red-400">*</span>}
+          </span>
+          {currentDoc?.data ? (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black border border-emerald-500/30 flex items-center gap-1">
+              <CheckCircle className="w-3 h-3 text-emerald-400" />
+              <span>Image Uploaded ✓</span>
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30">
+              {hint || 'Document Image Required'}
+            </span>
+          )}
+        </div>
+        
+        {currentDoc?.data ? (
+          <div className="flex items-center gap-2.5 p-1.5 bg-slate-900 rounded-lg border border-slate-700/60">
+            <div 
+              onClick={() => setPreviewingImage({ title, url: currentDoc.data! })}
+              className="w-14 h-12 rounded-lg overflow-hidden bg-slate-800 border border-slate-600 shrink-0 cursor-pointer hover:ring-2 hover:ring-blue-400 transition relative group"
+              title="Click to zoom image"
+            >
+              <img src={currentDoc.data} alt={title} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                <Eye className="w-3.5 h-3.5 text-white" />
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-bold text-[11px] text-white truncate">{currentDoc.file_name || sampleFileName}</div>
+              <div className="text-[10px] text-emerald-400 font-semibold">Document Attached</div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setPreviewingImage({ title, url: currentDoc.data! })}
+                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+              >
+                <Eye className="w-3 h-3" />
+                <span>View</span>
+              </button>
+              <label className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold cursor-pointer transition">
+                <span>Change</span>
+                <input 
+                  type="file" 
+                  accept="image/*,application/pdf" 
+                  className="hidden" 
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFileUpload(docKey, f);
+                  }} 
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => handleRemoveDoc(docKey)}
+                className="p-1 hover:bg-red-950/60 text-red-400 hover:text-red-300 rounded transition cursor-pointer"
+                title="Remove file"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className="flex flex-col items-center justify-center p-3 rounded-lg border-2 border-dashed border-slate-700 hover:border-blue-500/60 bg-slate-900/60 hover:bg-slate-900 cursor-pointer transition text-center group">
+            <Camera className="w-5 h-5 text-slate-400 group-hover:text-blue-400 mb-1 transition" />
+            <span className="text-[11px] font-bold text-slate-300 group-hover:text-white">
+              Upload or Take Photo of {title}
+            </span>
+            <span className="text-[9px] text-slate-500 mt-0.5">
+              Supports JPG, PNG, WebP or PDF (Max 8 MB)
+            </span>
+            <input 
+              type="file" 
+              accept="image/*,application/pdf" 
+              className="hidden" 
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) handleFileUpload(docKey, f);
+              }} 
+            />
+          </label>
+        )}
+      </div>
+    );
+  };
 
   // Extended Driver Induction Form fields
   const [regVendorName, setRegVendorName] = useState('SJT Logistics & Travels Partner');
@@ -426,22 +561,8 @@ export const DriverWebsite: React.FC = () => {
       tool_kit: true
     });
 
-    const sampleBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
-
-    setRegDocs({
-      rc: { file_name: 'rc_card_ka05au1234.jpg', data: sampleBase64, expires_at: '2038-03-11' },
-      insurance: { file_name: 'commercial_insurance.jpg', data: sampleBase64, expires_at: '2027-08-15' },
-      emissions: { file_name: 'puc_emission_test.jpg', data: sampleBase64, expires_at: '2026-12-14' },
-      fitness: { file_name: 'fitness_certificate_fc.jpg', data: sampleBase64, expires_at: '2026-02-28' },
-      b_extract: { file_name: 'rto_b_extract.jpg', data: sampleBase64, expires_at: '' },
-      permit: { file_name: 'all_india_tourist_permit.jpg', data: sampleBase64, expires_at: '2028-06-30' },
-      road_tax: { file_name: 'karnataka_road_tax.jpg', data: sampleBase64, expires_at: '2027-03-31' },
-      dl: { file_name: 'driving_license_anand.jpg', data: sampleBase64, expires_at: '2038-05-19' },
-      aadhaar: { file_name: 'aadhaar_card_front_back.jpg', data: sampleBase64, expires_at: '' },
-      pan: { file_name: 'pan_card.jpg', data: sampleBase64, expires_at: '' },
-      police_certificate: { file_name: 'police_clearance_blrp.jpg', data: sampleBase64, expires_at: '2027-01-14' },
-      passport_photo: { file_name: 'passport_photo_anand.jpg', data: sampleBase64, expires_at: '' }
-    });
+    const sampleDocs = getDefaultInductionDocuments('Anand Gowda', 'KA 05 AU 1234');
+    setRegDocs(sampleDocs);
   };
 
   // Announcement Banner State
@@ -1763,6 +1884,11 @@ export const DriverWebsite: React.FC = () => {
                       </div>
 
                       <div className="space-y-2">
+                        {/* 0. Chauffeur Passport Photo */}
+                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1 text-xs">
+                          {renderDocUploadField('passport_photo', 'Chauffeur Passport Size Photo / Uniform Selfie', 'chauffeur_photo.jpg', 'Upload clear face photo in uniform', true)}
+                        </div>
+
                         {/* 1. Driving Licence */}
                         <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5 text-xs">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
@@ -1775,7 +1901,7 @@ export const DriverWebsite: React.FC = () => {
                               className="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-amber-300"
                             />
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
+                          <div className="grid grid-cols-2 gap-2 text-[10px]">
                             <div>
                               <span className="text-slate-400 block">Issued Date:</span>
                               <input
@@ -1794,9 +1920,10 @@ export const DriverWebsite: React.FC = () => {
                                 className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
                               />
                             </div>
-                            <div className="col-span-2 sm:col-span-1 flex items-end">
-                              <span className="text-emerald-400 font-bold text-[10px]">✓ DL Copy Attached</span>
-                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-800">
+                            {renderDocUploadField('dl', 'Driving Licence (Front Image)', 'dl_front.jpg', 'Upload DL front image', true)}
+                            {renderDocUploadField('dl_back', 'Driving Licence (Back Image)', 'dl_back.jpg', 'Upload DL back image')}
                           </div>
                         </div>
 
@@ -1812,7 +1939,7 @@ export const DriverWebsite: React.FC = () => {
                               className="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-amber-300"
                             />
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
+                          <div className="grid grid-cols-2 gap-2 text-[10px]">
                             <div>
                               <span className="text-slate-400 block">Badge Issued Date:</span>
                               <input
@@ -1831,9 +1958,9 @@ export const DriverWebsite: React.FC = () => {
                                 className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
                               />
                             </div>
-                            <div className="col-span-2 sm:col-span-1 flex items-end">
-                              <span className="text-emerald-400 font-bold text-[10px]">✓ Commercial Badge Verified</span>
-                            </div>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-slate-800">
+                            {renderDocUploadField('badge', 'Commercial PSV Badge Certificate/Card', 'psv_badge.jpg', 'Upload badge card/certificate', true)}
                           </div>
                         </div>
 
@@ -1884,6 +2011,9 @@ export const DriverWebsite: React.FC = () => {
                               />
                             </div>
                           </div>
+                          <div className="mt-2 pt-2 border-t border-slate-800">
+                            {renderDocUploadField('aadhaar', `${regGovtIdType} Document Image`, 'govt_id.jpg', 'Upload ID card photo', true)}
+                          </div>
                         </div>
 
                         {/* 4. Police Verification & Medical Certificate */}
@@ -1910,6 +2040,7 @@ export const DriverWebsite: React.FC = () => {
                                 />
                               </div>
                             </div>
+                            {renderDocUploadField('police_certificate', 'Police Verification Certificate', 'police_clearance.jpg', 'Upload police clearance image', true)}
                           </div>
 
                           <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
@@ -1934,6 +2065,7 @@ export const DriverWebsite: React.FC = () => {
                                 />
                               </div>
                             </div>
+                            {renderDocUploadField('medical_certificate', 'Medical Fitness Certificate (Form 1-A)', 'medical_cert.jpg', 'Upload Form 1-A certificate', true)}
                           </div>
                         </div>
 
@@ -2131,6 +2263,7 @@ export const DriverWebsite: React.FC = () => {
                               />
                             </div>
                           </div>
+                          {renderDocUploadField('rc', 'Registration Copy (RC Book)', 'rc_book.jpg', 'Upload RC document', true)}
                         </div>
 
                         {/* Insurance */}
@@ -2156,6 +2289,7 @@ export const DriverWebsite: React.FC = () => {
                               />
                             </div>
                           </div>
+                          {renderDocUploadField('insurance', 'Commercial Vehicle Insurance', 'insurance.jpg', 'Upload policy document', true)}
                         </div>
 
                         {/* FC */}
@@ -2181,6 +2315,7 @@ export const DriverWebsite: React.FC = () => {
                               />
                             </div>
                           </div>
+                          {renderDocUploadField('fitness', 'Fitness Certificate (FC - Form 38)', 'fc_certificate.jpg', 'Upload FC document', true)}
                         </div>
 
                         {/* Permit */}
@@ -2206,6 +2341,7 @@ export const DriverWebsite: React.FC = () => {
                               />
                             </div>
                           </div>
+                          {renderDocUploadField('permit', 'Commercial Permit (Form 46)', 'commercial_permit.jpg', 'Upload permit document', true)}
                         </div>
 
                         {/* Road Tax */}
@@ -2231,6 +2367,7 @@ export const DriverWebsite: React.FC = () => {
                               />
                             </div>
                           </div>
+                          {renderDocUploadField('road_tax', 'Karnataka Road Tax Receipt', 'tax_receipt.jpg', 'Upload tax receipt', true)}
                         </div>
 
                         {/* Emission Test */}
@@ -2256,6 +2393,13 @@ export const DriverWebsite: React.FC = () => {
                               />
                             </div>
                           </div>
+                          {renderDocUploadField('emissions', 'Pollution Test Certificate (PUC)', 'emission_puc.jpg', 'Upload PUC certificate', true)}
+                        </div>
+
+                        {/* Vehicle Photo */}
+                        <div className="sm:col-span-2 p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                          <span className="font-bold text-slate-200 text-[11px] block">7. Vehicle Exterior & Yellow Plate Photo</span>
+                          {renderDocUploadField('vehicle_photo', 'Yellow-Board Vehicle Front & Plate Photo', 'vehicle_plate.jpg', 'Upload exterior photo with yellow number plate', true)}
                         </div>
                       </div>
                     </div>
@@ -4629,6 +4773,48 @@ export const DriverWebsite: React.FC = () => {
               >
                 <Car className="w-4 h-4 text-emerald-400" />
                 <span>All Shift Duties Done for Today • Switch to Daily Trips Driver</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* DOCUMENT PREVIEW MODAL */}
+      {/* ============================================================ */}
+      {previewingImage && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+          onClick={() => setPreviewingImage(null)}
+        >
+          <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl p-5 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-emerald-400" />
+                <h4 className="text-sm font-black text-white">{previewingImage.title}</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewingImage(null)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex items-center justify-center bg-slate-950 rounded-2xl p-3 border border-slate-800 min-h-[300px] max-h-[70vh] overflow-auto">
+              {previewingImage.url.startsWith('data:image') || previewingImage.url.endsWith('.jpg') || previewingImage.url.endsWith('.png') ? (
+                <img src={previewingImage.url} alt={previewingImage.title} className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-lg" />
+              ) : (
+                <iframe src={previewingImage.url} title={previewingImage.title} className="w-full h-[60vh] border rounded-xl bg-white" />
+              )}
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setPreviewingImage(null)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Close Preview
               </button>
             </div>
           </div>
