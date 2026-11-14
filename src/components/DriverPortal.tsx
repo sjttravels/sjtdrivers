@@ -2953,8 +2953,51 @@ export const DriverPortal: React.FC = () => {
             {currentSlide === 17 && (
               <div className="flex-1 bg-white overflow-y-auto p-5 space-y-4">
                 <div className="flex items-center justify-between">
-                  <div><h2 className="text-lg font-black text-[#071B49]">Driver verification</h2><p className="text-xs text-slate-500">Enter your details and upload clear documents for admin review.</p></div>
-                  {currentUser?.role === 'DRIVER' && <button onClick={() => { logout(); setCurrentSlide(3); }} className="text-xs font-bold text-slate-500">Log out</button>}
+                  <div>
+                    <h2 className="text-lg font-black text-[#071B49]">Driver Verification & Induction</h2>
+                    <p className="text-xs text-slate-500">Enter your details and upload clear documents for admin review.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDriverAddress('Nagasandra BGS Layout, Bengaluru 560073');
+                        setDriverLicenseNumber('KA-04-2018-0091823');
+                        setDriverAadhaarNumber('5421 8892 1045');
+                        setDriverPanNumber('ABCDE1234F');
+                        setDriverExperience('10');
+                        setSignUpVehicleNo('KA 05 AU 1234');
+                        setSignUpVehicleType('Tempo Traveller');
+                        setExpiryDates({
+                          rc: '2038-03-11',
+                          insurance: '2027-08-15',
+                          emissions: '2026-12-14',
+                          fitness: '2026-02-28',
+                          permit: '2028-06-30',
+                          road_tax: '2027-03-31',
+                          dl: '2038-05-19'
+                        });
+                        const sampleBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+                        setDocumentFiles({
+                          rc: { name: 'rc_card.jpg', data: sampleBase64 },
+                          insurance: { name: 'insurance.jpg', data: sampleBase64 },
+                          emissions: { name: 'puc.jpg', data: sampleBase64 },
+                          fitness: { name: 'fitness_fc.jpg', data: sampleBase64 },
+                          b_extract: { name: 'b_extract.jpg', data: sampleBase64 },
+                          permit: { name: 'permit.jpg', data: sampleBase64 },
+                          road_tax: { name: 'road_tax.jpg', data: sampleBase64 },
+                          dl: { name: 'dl.jpg', data: sampleBase64 },
+                          aadhaar: { name: 'aadhaar.jpg', data: sampleBase64 },
+                          pan: { name: 'pan.jpg', data: sampleBase64 },
+                          face: { name: 'selfie.jpg', data: sampleBase64 }
+                        });
+                      }}
+                      className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[10px] rounded-lg shadow cursor-pointer shrink-0"
+                    >
+                      ⚡ Auto-Fill Demo
+                    </button>
+                    {currentUser?.role === 'DRIVER' && <button onClick={() => { logout(); setCurrentSlide(3); }} className="text-xs font-bold text-slate-500">Log out</button>}
+                  </div>
                 </div>
                 {driverKyc && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900"><strong>Status: {driverKyc.kyc_status}</strong>{driverKyc.rejection_reason && <p className="mt-1 text-red-700">{driverKyc.rejection_reason}</p>}</div>}
                 {onboardingError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{onboardingError}</div>}
