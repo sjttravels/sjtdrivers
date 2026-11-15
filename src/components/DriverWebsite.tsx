@@ -662,6 +662,22 @@ export const DriverWebsite: React.FC = () => {
 
   // Real-time polling for incoming bookings every 4 seconds
   useEffect(() => {
+    // Purge legacy dummy bookings from localStorage on mount
+    try {
+      const raw = localStorage.getItem('sjt_bookings_list');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter((b: any) =>
+            b && !String(b.id || '').startsWith('bkg_') &&
+            !['SJT-544066', 'SJT-987128', 'SJT-766173'].includes(b.bookingCode || b.booking_code) &&
+            !['Aravind Swaminathan', 'Test Passenger', 'Overlapping Customer', 'Vinay Kumar', 'Priya Sharma', 'Antigravity Test Customer'].includes(b.customerName || b.customer_name)
+          );
+          localStorage.setItem('sjt_bookings_list', JSON.stringify(cleaned));
+        }
+      }
+    } catch {}
+
     const interval = setInterval(() => {
       refreshData(true);
     }, 4000);
@@ -736,6 +752,13 @@ export const DriverWebsite: React.FC = () => {
   // 1. INCOMING / UNASSIGNED RIDE REQUESTS (Customer placed ride waiting for driver to accept)
   const incomingRideRequests = useMemo(() => {
     return bookings.filter(b => {
+      // Exclude legacy mock / dummy records
+      if (String(b.id || '').startsWith('bkg_')) return false;
+      const code = b.booking_code || b.bookingCode || '';
+      if (['SJT-544066', 'SJT-987128', 'SJT-766173'].includes(code)) return false;
+      const name = b.customer_name || b.customerName || '';
+      if (['Aravind Swaminathan', 'Test Passenger', 'Overlapping Customer', 'Vinay Kumar', 'Priya Sharma', 'Antigravity Test Customer'].includes(name)) return false;
+
       const isUnassigned = !b.assigned_driver_id || b.assigned_driver_id === '';
       const isPendingStatus = ['PENDING', 'CONFIRMED', 'REQUESTED'].includes(String(b.status || '').toUpperCase());
       const notFinished = b.status !== 'CANCELLED' && b.status !== 'COMPLETED';
@@ -2843,16 +2866,15 @@ export const DriverWebsite: React.FC = () => {
                 <span className="hidden sm:inline">{isOnline ? 'Online (Ready)' : 'Offline'}</span>
               </button>
 
-              {/* Instant Customer Booking Simulation Button */}
+              {/* Live Bookings Sync Button */}
               <button
                 type="button"
-                onClick={handleSimulateCustomerBooking}
-                disabled={simulatingRide}
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-md shadow-amber-900/30 transition-all cursor-pointer"
-                title="Simulate a customer booking to test real-time acceptance"
+                onClick={() => refreshData()}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                title="Sync with server for live customer bookings"
               >
-                <Zap className="w-3.5 h-3.5 fill-current" />
-                <span className="hidden md:inline">{simulatingRide ? 'Simulating…' : '⚡ Test Ride'}</span>
+                <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+                <span className="hidden md:inline">Sync Bookings</span>
               </button>
 
               {/* Switch Chauffeur Account */}
@@ -3852,20 +3874,12 @@ export const DriverWebsite: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleSimulateCustomerBooking}
-                  disabled={simulatingRide}
-                  className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow transition-all cursor-pointer"
-                >
-                  <Zap className="w-3.5 h-3.5 fill-current" />
-                  <span>{simulatingRide ? 'Generating…' : '⚡ Simulate Incoming Ride'}</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => refreshData()}
-                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition"
-                  title="Refresh Bookings"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1.5 shadow transition-all cursor-pointer"
+                  title="Check for new customer rides"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Refresh Queue</span>
                 </button>
               </div>
             </div>
@@ -4044,10 +4058,11 @@ export const DriverWebsite: React.FC = () => {
                   </p>
                   <button
                     type="button"
-                    onClick={handleSimulateCustomerBooking}
-                    className="mt-2 px-3 py-1.5 bg-blue-900/60 hover:bg-blue-800 text-blue-200 text-xs font-bold rounded-xl border border-blue-700/60 cursor-pointer"
+                    onClick={() => refreshData()}
+                    className="mt-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 cursor-pointer flex items-center gap-2 mx-auto"
                   >
-                    Click to Simulate Instant Customer Booking
+                    <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Check for Customer Requests</span>
                   </button>
                 </div>
               )}
