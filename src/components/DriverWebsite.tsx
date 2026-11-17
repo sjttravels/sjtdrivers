@@ -51,11 +51,13 @@ import {
   Info,
   Camera,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Home
 } from 'lucide-react';
 import { exportToExcel, printSectionTable } from '../utils/exportUtils';
 import { TripType, DriverKycApplication } from '../types';
 import { getDefaultInductionDocuments } from '../utils/documentSamples';
+import { parseLocationDetails } from '../utils/locationUtils';
 
 const DRIVER_API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? `${window.location.protocol}//${window.location.hostname}:5000`
@@ -3902,8 +3904,7 @@ export const DriverWebsite: React.FC = () => {
                     const sched = formatBookingSchedule(ride.journey_date || ride.journeyDate, ride.journey_time || ride.journeyTime, ride.return_date || ride.returnDate);
                     const tripBadge = getTripTypeBadge(ride.trip_type || ride.tripType);
                     const bookingCode = ride.booking_code || ride.id;
-                    const mapsPickupUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ride.pickup)}`;
-                    const mapsDropUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ride.destination)}`;
+                    const loc = parseLocationDetails(ride);
 
                     return (
                       <div
@@ -3975,29 +3976,68 @@ export const DriverWebsite: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Route Coordinates with 1-Click Maps Navigation */}
-                        <div className="space-y-2 text-xs bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-start gap-2.5 min-w-0">
-                              <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                              <div className="min-w-0">
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Pickup Location</span>
-                                <strong className="text-white text-xs sm:text-sm block break-words">{ride.pickup}</strong>
+                        {/* Route Coordinates with 1-Click Maps Navigation & Exact Doorstep Address */}
+                        <div className="space-y-2.5 text-xs bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">
+                          {/* Pickup Locality & GPS Navigation */}
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-2.5 min-w-0">
+                                <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                <div className="min-w-0">
+                                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Pickup Locality</span>
+                                  <strong className="text-white text-xs sm:text-sm block break-words">{loc.cleanPickup || ride.pickup}</strong>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <a
+                                  href={loc.mapsDirUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] flex items-center gap-1 shadow-md shadow-emerald-900/50"
+                                  title="Start Turn-by-Turn GPS Navigation to Doorstep"
+                                >
+                                  <Compass className="w-3 h-3" />
+                                  <span>Navigate</span>
+                                </a>
+                                <a
+                                  href={loc.mapsPinUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-2 py-1 rounded-lg bg-blue-900/60 hover:bg-blue-800 text-blue-300 font-bold text-[10px] flex items-center gap-1 border border-blue-700/60"
+                                  title="View Pin on Google Maps"
+                                >
+                                  <Navigation className="w-2.5 h-2.5" />
+                                  <span>Pin</span>
+                                </a>
                               </div>
                             </div>
-                            <a
-                              href={mapsPickupUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-2 py-1 rounded-lg bg-blue-900/60 hover:bg-blue-800 text-blue-300 font-bold text-[10px] shrink-0 flex items-center gap-1 border border-blue-700/60"
-                              title="Open in Google Maps"
-                            >
-                              <Navigation className="w-2.5 h-2.5" />
-                              <span>Maps</span>
-                            </a>
+
+                            {/* Exact Doorstep / Home Address Box (Ola Cabs Style) */}
+                            {loc.exactAddress ? (
+                              <div className="bg-emerald-950/60 border border-emerald-500/50 rounded-xl p-2.5 flex items-start gap-2">
+                                <Home className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                <div className="min-w-0">
+                                  <span className="text-[10px] uppercase font-black text-emerald-300 block tracking-wide">
+                                    🏠 Exact Doorstep / Home Address:
+                                  </span>
+                                  <strong className="text-white text-xs block font-semibold leading-relaxed break-words">
+                                    {loc.exactAddress}
+                                  </strong>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {/* High-Accuracy GPS Badge */}
+                            {loc.pickupLat && loc.pickupLng && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-blue-300 font-mono bg-blue-950/40 border border-blue-800/40 px-2 py-0.5 rounded-lg">
+                                <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span>GPS Pin: {loc.pickupLat.toFixed(5)}°N, {loc.pickupLng.toFixed(5)}°E (Doorstep Accurate)</span>
+                              </div>
+                            )}
                           </div>
 
-                          <div className="flex items-start justify-between gap-2 pt-1.5 border-t border-slate-800/80">
+                          {/* Drop Destination */}
+                          <div className="flex items-start justify-between gap-2 pt-2 border-t border-slate-800/80">
                             <div className="flex items-start gap-2.5 min-w-0">
                               <Navigation className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                               <div className="min-w-0">
@@ -4006,11 +4046,11 @@ export const DriverWebsite: React.FC = () => {
                               </div>
                             </div>
                             <a
-                              href={mapsDropUrl}
+                              href={loc.mapsDropUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="px-2 py-1 rounded-lg bg-blue-900/60 hover:bg-blue-800 text-blue-300 font-bold text-[10px] shrink-0 flex items-center gap-1 border border-blue-700/60"
-                              title="Open in Google Maps"
+                              className="px-2.5 py-1 rounded-lg bg-blue-900/60 hover:bg-blue-800 text-blue-300 font-bold text-[10px] shrink-0 flex items-center gap-1 border border-blue-700/60"
+                              title="Open Destination in Google Maps"
                             >
                               <Navigation className="w-2.5 h-2.5" />
                               <span>Maps</span>
@@ -4089,8 +4129,7 @@ export const DriverWebsite: React.FC = () => {
                     const otpError = otpErrorMap[tripKey];
                     const sched = formatBookingSchedule(trip.journey_date || trip.journeyDate, trip.journey_time || trip.journeyTime, trip.return_date || trip.returnDate);
                     const tripBadge = getTripTypeBadge(trip.trip_type || trip.tripType);
-                    const mapsPickupUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trip.pickup)}`;
-                    const mapsDropUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trip.destination)}`;
+                    const loc = parseLocationDetails(trip);
 
                     return (
                       <div
@@ -4183,30 +4222,67 @@ export const DriverWebsite: React.FC = () => {
                             </div>
                           </div>
 
-                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-2">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold block">Route Coordinates</span>
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-2.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold block">Route & Doorstep Location</span>
                             <div className="flex items-start justify-between gap-2">
                               <div>
-                                <span className="text-slate-400 text-[10px] block">Pickup Location</span>
-                                <strong className="text-white text-xs block">{trip.pickup}</strong>
+                                <span className="text-slate-400 text-[10px] block">Pickup Locality</span>
+                                <strong className="text-white text-xs block">{loc.cleanPickup || trip.pickup}</strong>
                               </div>
-                              <a
-                                href={mapsPickupUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="px-2 py-0.5 rounded bg-blue-900/60 hover:bg-blue-800 text-blue-300 font-bold text-[10px] shrink-0 flex items-center gap-1 border border-blue-700/60"
-                              >
-                                <Navigation className="w-2.5 h-2.5" />
-                                <span>Maps</span>
-                              </a>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <a
+                                  href={loc.mapsDirUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] flex items-center gap-1 shadow"
+                                  title="Turn-by-Turn GPS Navigation"
+                                >
+                                  <Compass className="w-2.5 h-2.5" />
+                                  <span>Navigate</span>
+                                </a>
+                                <a
+                                  href={loc.mapsPinUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-2 py-0.5 rounded bg-blue-900/60 hover:bg-blue-800 text-blue-300 font-bold text-[10px] shrink-0 flex items-center gap-1 border border-blue-700/60"
+                                  title="View Pin on Google Maps"
+                                >
+                                  <Navigation className="w-2.5 h-2.5" />
+                                  <span>Pin</span>
+                                </a>
+                              </div>
                             </div>
-                            <div className="flex items-start justify-between gap-2 pt-1 border-t border-slate-800">
+
+                            {/* Exact Doorstep / Home Address Box */}
+                            {loc.exactAddress ? (
+                              <div className="bg-emerald-950/60 border border-emerald-500/50 rounded-xl p-2.5 flex items-start gap-2">
+                                <Home className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                                <div className="min-w-0">
+                                  <span className="text-[10px] uppercase font-black text-emerald-300 block">
+                                    🏠 Exact Doorstep / Home Address:
+                                  </span>
+                                  <strong className="text-white text-xs block font-semibold leading-relaxed break-words">
+                                    {loc.exactAddress}
+                                  </strong>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {/* GPS Pin Badge */}
+                            {loc.pickupLat && loc.pickupLng && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-blue-300 font-mono bg-blue-950/40 border border-blue-800/40 px-2 py-0.5 rounded-lg">
+                                <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span>GPS Pin: {loc.pickupLat.toFixed(5)}°N, {loc.pickupLng.toFixed(5)}°E</span>
+                              </div>
+                            )}
+
+                            <div className="flex items-start justify-between gap-2 pt-2 border-t border-slate-800">
                               <div>
                                 <span className="text-slate-400 text-[10px] block">Drop Destination</span>
                                 <strong className="text-white text-xs block">{trip.destination}</strong>
                               </div>
                               <a
-                                href={mapsDropUrl}
+                                href={loc.mapsDropUrl}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="px-2 py-0.5 rounded bg-blue-900/60 hover:bg-blue-800 text-blue-300 font-bold text-[10px] shrink-0 flex items-center gap-1 border border-blue-700/60"
@@ -4217,6 +4293,36 @@ export const DriverWebsite: React.FC = () => {
                             </div>
                           </div>
                         </div>
+
+                        {/* HERO 1-CLICK TURN-BY-TURN DOORSTEP NAVIGATION (WHEN EN ROUTE) */}
+                        {isEnRoute && (
+                          <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 p-4 rounded-2xl border-2 border-emerald-500/70 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="space-y-1">
+                              <span className="text-[10px] uppercase font-black text-emerald-400 tracking-wider flex items-center gap-1.5">
+                                <Compass className="w-3.5 h-3.5 animate-spin" />
+                                <span>Ola/Uber Style Doorstep GPS Navigation</span>
+                              </span>
+                              <strong className="text-white text-sm block">
+                                {loc.exactAddress ? `Doorstep Address: ${loc.exactAddress}` : `Locality: ${loc.cleanPickup || trip.pickup}`}
+                              </strong>
+                              {loc.pickupLat && loc.pickupLng && (
+                                <span className="text-[11px] text-emerald-300 font-mono block">
+                                  GPS Pin: {loc.pickupLat.toFixed(5)}°N, {loc.pickupLng.toFixed(5)}°E (High Precision Doorstep Coordinates)
+                                </span>
+                              )}
+                            </div>
+                            <a
+                              href={loc.mapsDirUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 transition-all shrink-0 cursor-pointer"
+                            >
+                              <Navigation className="w-4 h-4" />
+                              <span>Start Turn-by-Turn GPS Navigation</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        )}
 
                         {/* STEP A: PASSENGER START RIDE OTP VERIFICATION (WHEN STATUS = 'ASSIGNED') */}
                         {isEnRoute && (
