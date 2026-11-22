@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Car, 
@@ -600,9 +600,20 @@ export const DriverWebsite: React.FC = () => {
   ) || globalActiveDuty;
   const currentActiveDuty = activeDuty;
 
-  // Availability & Online Status
-  const [isOnline, setIsOnline] = useState<boolean>(true);
+  // Availability & Online Status (Driver must explicitly click Online to receive bookings)
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sjt_driver_is_online') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [availabilitySaving, setAvailabilitySaving] = useState<boolean>(false);
+
+  // Big Rapido / Porter Style Incoming Offer Popup States
+  const [activeOfferPopupRide, setActiveOfferPopupRide] = useState<any | null>(null);
+  const [dismissedOfferIds, setDismissedOfferIds] = useState<Set<string>>(new Set());
+  const [offerCountdown, setOfferCountdown] = useState<number>(30);
 
   // Shift Duty Form State (Strictly empty by default - driver fills them)
   const [dutyShift, setDutyShift] = useState<string>('Shift 1');
@@ -678,7 +689,7 @@ export const DriverWebsite: React.FC = () => {
           localStorage.setItem('sjt_bookings_list', JSON.stringify(cleaned));
         }
       }
-    } catch {}
+    } catch { }
 
     const interval = setInterval(() => {
       refreshData(true);
@@ -753,6 +764,9 @@ export const DriverWebsite: React.FC = () => {
   // Passenger Bookings:
   // 1. INCOMING / UNASSIGNED RIDE REQUESTS (Customer placed ride waiting for driver to accept)
   const incomingRideRequests = useMemo(() => {
+    // When driver is OFFLINE, strictly hide all bookings
+    if (!isOnline) return [];
+
     return bookings.filter(b => {
       // Exclude legacy mock / dummy records
       if (String(b.id || '').startsWith('bkg_')) return false;
@@ -766,7 +780,7 @@ export const DriverWebsite: React.FC = () => {
       const notFinished = b.status !== 'CANCELLED' && b.status !== 'COMPLETED';
       return isUnassigned && isPendingStatus && notFinished;
     });
-  }, [bookings]);
+  }, [bookings, isOnline]);
 
   // 2. MY ASSIGNED & ONGOING TRIPS (Rides accepted by this driver)
   const myAcceptedTrips = useMemo(() => {
@@ -1049,17 +1063,98 @@ export const DriverWebsite: React.FC = () => {
   const saveDriverAvailability = async (nextOnline: boolean) => {
     setAvailabilitySaving(true);
     try {
+      try { localStorage.setItem('sjt_driver_is_online', String(nextOnline)); } catch (_) {}
       await fetch(`${DRIVER_API_BASE}/api/driver/availability`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('sjt_token') || ''}` },
         body: JSON.stringify({ is_online: nextOnline, service_area: 'Bengaluru Commercial Belt' })
       });
       setIsOnline(nextOnline);
+      if (!nextOnline) {
+        setActiveOfferPopupRide(null);
+      } else {
+        // Trigger fresh sync of bookings when coming online
+        refreshData(true);
+      }
     } catch (err) {
       setIsOnline(nextOnline);
+      if (!nextOnline) {
+        setActiveOfferPopupRide(null);
+      }
     } finally {
       setAvailabilitySaving(false);
     }
+  };
+
+  // Web Audio Chime synthesizer for Rapido/Porter style dispatch alert
+  const playDispatchAlertTone = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const playTone = (freq: number, start: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + duration);
+      };
+      playTone(659.25, 0.0, 0.15); // E5
+      playTone(880.00, 0.15, 0.35); // A5
+    } catch (_) {}
+  }, []);
+
+  // Monitor incoming offers and trigger Rapido/Porter style alert when Online
+  useEffect(() => {
+    if (!isOnline || driverMode !== 'REGULAR') {
+      if (activeOfferPopupRide) setActiveOfferPopupRide(null);
+      return;
+    }
+
+    const nextOffer = incomingRideRequests.find(r => !dismissedOfferIds.has(String(r.id || r.booking_code)));
+    if (nextOffer) {
+      if (!activeOfferPopupRide || (activeOfferPopupRide.id !== nextOffer.id && activeOfferPopupRide.booking_code !== nextOffer.booking_code)) {
+        setActiveOfferPopupRide(nextOffer);
+        setOfferCountdown(30);
+        playDispatchAlertTone();
+      }
+    } else {
+      setActiveOfferPopupRide(null);
+    }
+  }, [isOnline, driverMode, incomingRideRequests, dismissedOfferIds, playDispatchAlertTone, activeOfferPopupRide]);
+
+  // Offer countdown timer (30s)
+  useEffect(() => {
+    if (!activeOfferPopupRide) return;
+    const interval = setInterval(() => {
+      setOfferCountdown(prev => {
+        if (prev <= 1) {
+          setDismissedOfferIds(old => new Set(old).add(String(activeOfferPopupRide.id || activeOfferPopupRide.booking_code)));
+          setActiveOfferPopupRide(null);
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeOfferPopupRide]);
+
+  const handlePopupAccept = async () => {
+    if (!activeOfferPopupRide) return;
+    const rideToAccept = activeOfferPopupRide;
+    setActiveOfferPopupRide(null);
+    await handleAcceptRide(rideToAccept);
+  };
+
+  const handlePopupDecline = () => {
+    if (!activeOfferPopupRide) return;
+    setDismissedOfferIds(old => new Set(old).add(String(activeOfferPopupRide.id || activeOfferPopupRide.booking_code)));
+    setActiveOfferPopupRide(null);
   };
 
   // 1-Click Ride Acceptance Handler
@@ -1726,8 +1821,8 @@ export const DriverWebsite: React.FC = () => {
               ) : (
                 /* Complete Driver & Vehicle Induction Form */
                 <form onSubmit={handleDriverSignup} className="space-y-4">
-                  {/* Top Bar with 1-Click Auto Fill Demo */}
-                  <div className="p-3 bg-slate-950/90 rounded-2xl border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  {/* Official Induction Dossier Header */}
+                  <div className="p-3 bg-slate-950/90 rounded-2xl border border-blue-500/30 flex items-center justify-between gap-2.5">
                     <div>
                       <div className="text-xs font-black text-white flex items-center gap-1.5">
                         <Award className="w-4 h-4 text-[#ED1735]" />
@@ -1737,13 +1832,9 @@ export const DriverWebsite: React.FC = () => {
                         Driver Details + Vehicle Details + Document Validity Dates + 18-Point Physical Safety Checklist
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={fillSampleKycDocuments}
-                      className="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs rounded-xl shadow-lg transition cursor-pointer shrink-0 flex items-center gap-1.5 animate-pulse"
-                    >
-                      <span>⚡ 1-Click Auto-Fill Demo Induction KYC (Both Forms)</span>
-                    </button>
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2.5 py-1 rounded-lg shrink-0">
+                      Official KYC Dossier
+                    </span>
                   </div>
 
                   {/* ======================================================== */}
@@ -3890,11 +3981,17 @@ export const DriverWebsite: React.FC = () => {
             <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-xl space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${incomingRideRequests.length > 0 ? 'bg-amber-400 animate-ping' : 'bg-slate-600'}`}></div>
+                  <div className={`w-3 h-3 rounded-full ${!isOnline ? 'bg-slate-600' : incomingRideRequests.length > 0 ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'}`}></div>
                   <h4 className="text-base font-black text-white">Incoming Customer Ride Requests</h4>
                 </div>
-                <span className="text-xs font-mono font-bold text-amber-300 bg-amber-950/80 px-3 py-1 rounded-xl border border-amber-800">
-                  {incomingRideRequests.length} Ride(s) Waiting For Driver
+                <span className={`text-xs font-mono font-bold px-3 py-1 rounded-xl border ${
+                  !isOnline 
+                    ? 'text-slate-400 bg-slate-800 border-slate-700' 
+                    : incomingRideRequests.length > 0 
+                      ? 'text-amber-300 bg-amber-950/80 border-amber-800' 
+                      : 'text-emerald-300 bg-emerald-950/80 border-emerald-800'
+                }`}>
+                  {!isOnline ? 'Offline' : `${incomingRideRequests.length} Ride(s) Waiting For Driver`}
                 </span>
               </div>
 
@@ -4090,11 +4187,36 @@ export const DriverWebsite: React.FC = () => {
                     );
                   })}
                 </div>
+              ) : !isOnline ? (
+                /* OFFLINE BANNER: Driver must click Online to see and accept bookings */
+                <div className="p-8 text-center bg-slate-950/70 border border-slate-800 rounded-3xl space-y-3 animate-fade-in">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 mx-auto flex items-center justify-center">
+                    <Radio className="w-7 h-7 opacity-60" />
+                  </div>
+                  <div>
+                    <h5 className="text-base font-black text-white">You are Currently OFFLINE</h5>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                      Passenger bookings and airport/city ride requests are hidden while offline. Tap below to go online and receive real-time ride offers.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void saveDriverAvailability(true)}
+                    disabled={availabilitySaving}
+                    className="mt-3 px-8 py-3.5 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:to-green-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-xl shadow-emerald-950/60 transition-all cursor-pointer inline-flex items-center gap-2 transform hover:scale-105 active:scale-95"
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping"></span>
+                    <span>GO ONLINE & RECEIVE RIDES</span>
+                  </button>
+                </div>
               ) : (
                 <div className="p-8 text-center text-slate-500 border border-dashed border-slate-800 rounded-2xl space-y-2">
-                  <Compass className="w-8 h-8 text-slate-600 mx-auto" />
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mx-auto flex items-center justify-center animate-pulse">
+                    <Radio className="w-5 h-5" />
+                  </div>
+                  <h5 className="text-xs font-bold text-emerald-400">ONLINE & READY FOR RIDES</h5>
                   <p className="text-xs text-slate-400">
-                    No unassigned customer bookings in queue. As soon as a user books a ride on the customer website or mobile app, it will appear here instantly!
+                    Radar active. Waiting for passengers to book trips in your area. As soon as a ride is placed, you will receive an instant dispatch alert!
                   </p>
                   <button
                     type="button"
@@ -4936,6 +5058,130 @@ export const DriverWebsite: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* BIG RAPIDO / PORTER STYLE INCOMING RIDE REQUEST POPUP (WHEN ONLINE) */}
+      {/* ============================================================ */}
+      {activeOfferPopupRide && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
+          <div className="max-w-lg w-full bg-slate-900 border-2 border-amber-400 rounded-3xl p-5 sm:p-6 shadow-[0_0_50px_rgba(245,158,11,0.35)] relative overflow-hidden text-white space-y-4">
+            {/* Top Animated Progress Countdown Bar */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-800">
+              <div
+                className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-1000 ease-linear"
+                style={{ width: `${(offerCountdown / 30) * 100}%` }}
+              />
+            </div>
+
+            {/* Header: Alert Pulsing Badge & Countdown Timer */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-amber-400 animate-ping"></span>
+                <span className="bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
+                  <Radio className="w-3.5 h-3.5 text-amber-400" />
+                  <span>New Ride Offer • Auto-Dispatch</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1 bg-amber-950/80 border border-amber-500/50 text-amber-300 font-mono font-black text-xs px-2.5 py-1 rounded-xl">
+                <Clock className="w-3.5 h-3.5" />
+                <span>{offerCountdown}s</span>
+              </div>
+            </div>
+
+            {/* Big Quoted Fare Hero */}
+            <div className="bg-gradient-to-br from-emerald-950/60 via-slate-950 to-slate-900 border border-emerald-500/40 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                  Driver Earnings (Cash / UPI)
+                </span>
+                <div className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono tracking-tight mt-0.5">
+                  ₹{Number(activeOfferPopupRide.quoted_amount || activeOfferPopupRide.quotedAmount || 0).toLocaleString('en-IN')}
+                </div>
+                <span className="text-[10px] text-emerald-300/80 font-medium">Pay directly to you on trip completion</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-black px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 block mb-1">
+                  {activeOfferPopupRide.trip_type || activeOfferPopupRide.tripType || 'Daily Trip'}
+                </span>
+                <span className="text-xs font-mono font-bold text-slate-400">
+                  #{activeOfferPopupRide.booking_code || activeOfferPopupRide.bookingCode || activeOfferPopupRide.id?.slice(0, 8)}
+                </span>
+              </div>
+            </div>
+
+            {/* Route: Pickup Doorstep & Drop */}
+            {(() => {
+              const loc = parseLocationDetails(activeOfferPopupRide);
+              return (
+                <div className="bg-slate-950/90 rounded-2xl p-3.5 border border-slate-800 space-y-3 text-xs">
+                  {/* Pickup */}
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <Navigation className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Pickup Location</div>
+                      <div className="text-sm font-black text-white truncate">{loc.cleanPickup || activeOfferPopupRide.pickup}</div>
+                      {loc.exactAddress && (
+                        <div className="mt-1 text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded-xl p-2 font-medium flex items-start gap-1.5">
+                          <Home className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="text-amber-200">Exact Doorstep / Flat:</strong> {loc.exactAddress}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Drop */}
+                  <div className="flex items-start gap-2.5 pt-2 border-t border-slate-800/80">
+                    <div className="w-6 h-6 rounded-full bg-red-500/20 text-red-400 border border-red-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <MapPin className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Drop Destination</div>
+                      <div className="text-sm font-black text-white truncate">{activeOfferPopupRide.destination}</div>
+                    </div>
+                  </div>
+
+                  {/* Passenger & Vehicle Info */}
+                  <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Passenger:</span>
+                      <span className="font-bold text-white">{activeOfferPopupRide.customer_name || activeOfferPopupRide.customerName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Vehicle:</span>
+                      <span className="font-bold text-white truncate block">{activeOfferPopupRide.vehicle_name || activeOfferPopupRide.vehicleName || 'Commercial Fleet'}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Two Big Action Buttons */}
+            <div className="grid grid-cols-3 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handlePopupDecline}
+                className="py-3.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-2xl border border-slate-700 cursor-pointer transition flex items-center justify-center gap-1.5"
+              >
+                <X className="w-4 h-4" />
+                <span>Pass</span>
+              </button>
+              <button
+                type="button"
+                onClick={handlePopupAccept}
+                disabled={Boolean(acceptingRideId)}
+                className="col-span-2 py-3.5 px-5 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:to-green-500 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-emerald-950/60 transition-all cursor-pointer flex items-center justify-center gap-2 transform active:scale-95"
+              >
+                <Check className="w-5 h-5 stroke-[3]" />
+                <span>{acceptingRideId ? 'Accepting...' : 'ACCEPT RIDE NOW'}</span>
               </button>
             </div>
           </div>

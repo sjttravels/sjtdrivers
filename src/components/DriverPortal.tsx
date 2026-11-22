@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 
 const DRIVER_API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -440,6 +440,43 @@ export const DriverPortal: React.FC = () => {
     }
   };
 
+  // Audio dispatcher chime synthesizer for high-urgency ride notification (Rapido/Porter style)
+  const playDispatchAlertTone = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      [0, 0.22, 0.44].forEach((t, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(i % 2 === 0 ? 880 : 1174.66, now + t);
+        gain.gain.setValueAtTime(0.2, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + t + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + t);
+        osc.stop(now + t + 0.2);
+      });
+    } catch {}
+  }, []);
+
+  // Auto-alert & pop to Slide 9 when an incoming offer arrives (Rapido / Porter live dispatch)
+  const lastAlertedRideIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isOnline || !canTakeDailyTrips || !availableRides.length) return;
+    const firstRide = availableRides[0];
+    if (firstRide && firstRide.id !== lastAlertedRideIdRef.current) {
+      lastAlertedRideIdRef.current = firstRide.id;
+      setRequestCountdown(30);
+      playDispatchAlertTone();
+      if (currentSlide === 6) {
+        setCurrentSlide(9);
+      }
+    }
+  }, [availableRides, isOnline, canTakeDailyTrips, currentSlide, playDispatchAlertTone]);
+
   // Countdown timer for Slide 9 (Incoming Request)
   useEffect(() => {
     let timer: any;
@@ -447,6 +484,9 @@ export const DriverPortal: React.FC = () => {
       timer = setInterval(() => {
         setRequestCountdown(prev => (prev > 0 ? prev - 1 : 0));
       }, 1000);
+    } else if (currentSlide === 9 && requestCountdown === 0) {
+      // Auto-return to dashboard when timer expires
+      setCurrentSlide(6);
     }
     return () => clearInterval(timer);
   }, [currentSlide, requestCountdown]);
@@ -2141,11 +2181,35 @@ export const DriverPortal: React.FC = () => {
             {/* ============================================================ */}
             {currentSlide === 9 && (
               <div className="flex-1 flex flex-col justify-between p-5 bg-white overflow-y-auto">
-                <div className="flex items-center gap-2 mb-2">
-                  <button onClick={() => setCurrentSlide(6)} className="p-1 rounded-full hover:bg-slate-100">
-                    <ArrowLeft className="w-5 h-5 text-slate-700" />
-                  </button>
-                  <h2 className="text-base font-black text-[#071B49]">New Ride Request</h2>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setCurrentSlide(6)} className="p-1 rounded-full hover:bg-slate-100">
+                      <ArrowLeft className="w-5 h-5 text-slate-700" />
+                    </button>
+                    <h2 className="text-base font-black text-[#071B49]">Incoming Ride Offer</h2>
+                  </div>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse">
+                    ⚡ LIVE DISPATCH
+                  </span>
+                </div>
+
+                {/* Animated 30-Second Countdown Bar (Rapido / Porter Style) */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1">
+                    <span className="flex items-center gap-1 text-amber-700 font-extrabold">
+                      <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                      Rapido/Porter Urgency Window:
+                    </span>
+                    <span className="font-mono text-xs font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      {requestCountdown}s
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                    <div
+                      className="h-full bg-gradient-to-r from-red-500 via-amber-500 to-emerald-500 transition-all duration-1000 ease-linear rounded-full"
+                      style={{ width: `${Math.max(0, Math.min(100, (requestCountdown / 30) * 100))}%` }}
+                    />
+                  </div>
                 </div>
 
                 <div className="my-auto space-y-4">
@@ -2291,22 +2355,24 @@ export const DriverPortal: React.FC = () => {
                     );
                   })()}
 
-                  {/* Accept (30s) / Reject Action Buttons matching Mockup 2 */}
-                  <div className="grid grid-cols-2 gap-3 pt-2">
+                  {/* Accept (30s) / Reject Action Buttons matching Rapido & Porter */}
+                  <div className="grid grid-cols-3 gap-2 pt-2">
                     <button
                       onClick={handleDeclineRide}
                       disabled={!pendingDailyTrip}
-                      className="py-3 px-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-xs shadow-md shadow-red-500/20 active:scale-95 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                      className="py-3.5 px-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs shadow transition-all disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center gap-1"
                     >
-                      Reject
+                      <X className="w-4 h-4" />
+                      <span>Pass</span>
                     </button>
                     <button
                       onClick={handleAcceptRide}
                       disabled={!pendingDailyTrip}
-                      className="py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md shadow-emerald-500/30 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="col-span-2 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-xs shadow-lg shadow-emerald-500/30 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 animate-pulse"
                     >
-                      <span>Accept</span>
-                      <span className="w-5 h-5 rounded-full bg-black/20 text-white text-[10px] flex items-center justify-center font-mono">
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>ACCEPT RIDE NOW</span>
+                      <span className="w-5 h-5 rounded-full bg-black/25 text-white text-[10px] flex items-center justify-center font-mono">
                         {requestCountdown}s
                       </span>
                     </button>
@@ -2993,44 +3059,6 @@ export const DriverPortal: React.FC = () => {
                     <p className="text-xs text-slate-500">Enter your details and upload clear documents for admin review.</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDriverAddress('Nagasandra BGS Layout, Bengaluru 560073');
-                        setDriverLicenseNumber('KA-04-2018-0091823');
-                        setDriverAadhaarNumber('5421 8892 1045');
-                        setDriverPanNumber('ABCDE1234F');
-                        setDriverExperience('10');
-                        setSignUpVehicleNo('KA 05 AU 1234');
-                        setSignUpVehicleType('Tempo Traveller');
-                        setExpiryDates({
-                          rc: '2038-03-11',
-                          insurance: '2027-08-15',
-                          emissions: '2026-12-14',
-                          fitness: '2026-02-28',
-                          permit: '2028-06-30',
-                          road_tax: '2027-03-31',
-                          dl: '2038-05-19'
-                        });
-                        const sampleBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
-                        setDocumentFiles({
-                          rc: { name: 'rc_card.jpg', data: sampleBase64 },
-                          insurance: { name: 'insurance.jpg', data: sampleBase64 },
-                          emissions: { name: 'puc.jpg', data: sampleBase64 },
-                          fitness: { name: 'fitness_fc.jpg', data: sampleBase64 },
-                          b_extract: { name: 'b_extract.jpg', data: sampleBase64 },
-                          permit: { name: 'permit.jpg', data: sampleBase64 },
-                          road_tax: { name: 'road_tax.jpg', data: sampleBase64 },
-                          dl: { name: 'dl.jpg', data: sampleBase64 },
-                          aadhaar: { name: 'aadhaar.jpg', data: sampleBase64 },
-                          pan: { name: 'pan.jpg', data: sampleBase64 },
-                          face: { name: 'selfie.jpg', data: sampleBase64 }
-                        });
-                      }}
-                      className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[10px] rounded-lg shadow cursor-pointer shrink-0"
-                    >
-                      ⚡ Auto-Fill Demo
-                    </button>
                     {currentUser?.role === 'DRIVER' && <button onClick={() => { logout(); setCurrentSlide(3); }} className="text-xs font-bold text-slate-500">Log out</button>}
                   </div>
                 </div>

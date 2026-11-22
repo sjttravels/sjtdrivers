@@ -517,7 +517,6 @@ function getInitialView(): { view: AppView; standalone: boolean } {
       hash === '#customer-app' ||
       hash === '#mobile' ||
       hash === '#app' ||
-      port === '3001' ||
       viewParam === 'user-app' ||
       viewParam === 'customer-app' ||
       viewParam === 'mobile' ||
