@@ -52,6 +52,7 @@ import {
   Home
 } from 'lucide-react';
 import { parseLocationDetails } from '../utils/locationUtils';
+import { getBookingTripMetrics } from '../services/distanceService';
 
 export type DriverAppSlide = 
   | 1  // Splash Screen
@@ -2266,6 +2267,30 @@ export const DriverPortal: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* Booking KM & Economics Strip for Driver */}
+                        {(() => {
+                          const metrics = getBookingTripMetrics(pendingDailyTrip);
+                          return (
+                            <div className="bg-gradient-to-r from-amber-50 via-slate-50 to-emerald-50 p-2.5 rounded-xl border border-amber-200 grid grid-cols-3 gap-1.5 text-center">
+                              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
+                                <span className="text-[9px] text-slate-500 font-bold uppercase block">Distance</span>
+                                <span className="text-sm font-black text-amber-600 font-mono block mt-0.5">{metrics.distanceDisplay}</span>
+                                <span className="text-[8px] text-slate-400 block truncate">Google Road KM</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
+                                <span className="text-[9px] text-slate-500 font-bold uppercase block">Est. Time</span>
+                                <span className="text-sm font-black text-blue-600 font-mono block mt-0.5">{metrics.durationText}</span>
+                                <span className="text-[8px] text-slate-400 block truncate">{metrics.routeVia}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
+                                <span className="text-[9px] text-slate-500 font-bold uppercase block">Rate Yield</span>
+                                <span className="text-sm font-black text-emerald-600 font-mono block mt-0.5">{metrics.perKmRateText}</span>
+                                <span className="text-[8px] text-emerald-600/80 font-bold block truncate">Gross / KM</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {/* Route Details with Google Maps & Doorstep Navigation */}
                         {(() => {
                           const loc = parseLocationDetails(pendingDailyTrip);
@@ -2318,6 +2343,18 @@ export const DriverPortal: React.FC = () => {
                                   GPS Pin: {loc.pickupLat.toFixed(5)}°N, {loc.pickupLng.toFixed(5)}°E
                                 </div>
                               )}
+
+                              {/* Route distance connector */}
+                              {(() => {
+                                const metrics = getBookingTripMetrics(pendingDailyTrip);
+                                return (
+                                  <div className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-slate-100 text-[10px] text-slate-600">
+                                    <span className="font-bold text-amber-700 font-mono">🛣️ {metrics.distanceDisplay}</span>
+                                    <span>{metrics.durationText}</span>
+                                    <span className="truncate max-w-[120px]">via {metrics.routeVia}</span>
+                                  </div>
+                                );
+                              })()}
 
                               <div className="flex items-start justify-between gap-1.5 pt-1 border-t border-slate-100">
                                 <div className="flex items-start gap-2 min-w-0">
@@ -2533,10 +2570,34 @@ export const DriverPortal: React.FC = () => {
                       <span className="text-slate-500">Vehicle & Capacity</span>
                       <strong className="text-slate-800">{tripVehicleName} ({tripPassengers} Pass)</strong>
                     </div>
+                    {(() => {
+                      const metrics = getBookingTripMetrics({ pickup: fromLocation, destination: toLocation, trip_type: tripType, quoted_amount: tripFare });
+                      return (
+                        <>
+                          <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                            <span className="text-slate-500">Trip Distance & Duration</span>
+                            <strong className="font-mono text-amber-700 font-bold">{metrics.distanceDisplay} ({metrics.durationText})</strong>
+                          </div>
+                          <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 text-[11px] text-slate-500">
+                            <span>Route Highway Corridor</span>
+                            <span className="font-medium text-slate-700 truncate max-w-[180px]">{metrics.routeVia}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Total Fare</span>
                       <strong className="font-mono text-emerald-600">₹{tripFare.toLocaleString('en-IN')} (Pay to Driver)</strong>
                     </div>
+                    {(() => {
+                      const metrics = getBookingTripMetrics({ pickup: fromLocation, destination: toLocation, trip_type: tripType, quoted_amount: tripFare });
+                      return (
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-200 text-[11px] text-slate-500">
+                          <span>Driver Rate Yield</span>
+                          <span className="font-bold font-mono text-emerald-700">{metrics.perKmRateText}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Buttons */}
@@ -2743,6 +2804,15 @@ export const DriverPortal: React.FC = () => {
                       <span className="text-slate-500">Vehicle & Capacity</span>
                       <strong className="text-slate-800">{tripVehicleName} ({tripPassengers} Pass)</strong>
                     </div>
+                    {(() => {
+                      const metrics = getBookingTripMetrics({ pickup: fromLocation, destination: toLocation, trip_type: tripType, quoted_amount: tripFare });
+                      return (
+                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                          <span className="text-slate-500">Planned Route Distance</span>
+                          <strong className="text-amber-700 font-mono font-bold">{metrics.distanceDisplay} ({metrics.durationText})</strong>
+                        </div>
+                      );
+                    })()}
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Odometer Start</span>
                       <strong className="font-mono text-slate-900">{odometerStart} km</strong>
