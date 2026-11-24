@@ -600,14 +600,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('sjt_kyc_list');
       if (saved) return JSON.parse(saved);
     } catch { }
-    return DEFAULT_INDUCTION_APPLICATIONS;
+    return [];
   });
   const [driverKyc, setDriverKyc] = useState<DriverKycApplication | null>(() => {
     try {
       const saved = localStorage.getItem('sjt_driver_kyc');
       if (saved) return JSON.parse(saved);
     } catch { }
-    return DEFAULT_INDUCTION_APPLICATIONS[0];
+    return null;
   });
   const [drivers, setDrivers] = useState<DriverProfile[]>(DEFAULT_DRIVER_PROFILES);
   const [invoices, setInvoices] = useState<CorporateInvoice[]>([]);
@@ -928,21 +928,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Resilient offline / Vercel fallback for Chauffeur sign-in
     const phoneDigits = cleanEmail.replace(/\D/g, '');
-    const matchedProfile = DEFAULT_DRIVER_PROFILES.find(p =>
+
+    // Check registered chauffeurs stored from signup
+    let savedDrivers: any[] = [];
+    try {
+      const regRaw = localStorage.getItem('sjt_registered_drivers');
+      if (regRaw) savedDrivers = JSON.parse(regRaw);
+    } catch { }
+
+    const matchedRegistered = savedDrivers.find((d: any) =>
+      (d.phone && phoneDigits.length >= 7 && d.phone.replace(/\D/g, '').endsWith(phoneDigits.slice(-10))) ||
+      (d.email && d.email.toLowerCase() === cleanEmail)
+    );
+
+    const matchedPreset = DEFAULT_DRIVER_PROFILES.find(p =>
       p.email.toLowerCase() === cleanEmail ||
-      (phoneDigits.length >= 4 && p.phone.replace(/\D/g, '').includes(phoneDigits)) ||
-      p.name.toLowerCase().includes(cleanEmail)
-    ) || DEFAULT_DRIVER_PROFILES[0];
+      (phoneDigits.length >= 10 && p.phone.replace(/\D/g, '').endsWith(phoneDigits.slice(-10))) ||
+      (cleanEmail.length > 3 && p.name.toLowerCase() === cleanEmail)
+    );
+
+    const fallbackName = matchedRegistered?.name || matchedPreset?.name || (cleanEmail.includes('@') ? cleanEmail.split('@')[0] : `Chauffeur ${phoneDigits.slice(-4) || cleanEmail}`);
+    const fallbackPhone = matchedRegistered?.phone || matchedPreset?.phone || (phoneDigits.length >= 10 ? `+91 ${phoneDigits.slice(-10)}` : cleanEmail);
+    const fallbackVehicle = matchedRegistered?.vehicleReg || matchedRegistered?.vehicle_reg || matchedPreset?.assignedVehicleReg || '';
 
     const driverUser: User = {
-      id: matchedProfile.id || 'drv_ramesh',
-      email: matchedProfile.email || (cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@driver.sjttravels.com`),
-      name: matchedProfile.name || 'Ramesh Kumar',
-      phone: matchedProfile.phone || '+91 99009 75920',
+      id: matchedRegistered?.id || matchedPreset?.id || `drv_${phoneDigits.slice(-6) || Math.random().toString(36).substring(2, 8)}`,
+      email: matchedRegistered?.email || matchedPreset?.email || (cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@driver.sjttravels.com`),
+      name: fallbackName,
+      phone: fallbackPhone,
       role: 'DRIVER',
-      assigned_vehicle: matchedProfile.assignedVehicleReg || 'KA 05 AB 1234',
+      assigned_vehicle: fallbackVehicle,
       duty_mode: 'BOTH',
-      kyc_status: 'APPROVED'
+      kyc_status: (matchedPreset || matchedRegistered) ? 'APPROVED' : 'PENDING'
     };
 
     setCurrentUser(driverUser);
@@ -1038,15 +1055,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const submitDriverKyc = async (formData: Partial<DriverKycApplication>): Promise<DriverKycApplication> => {
     const kycRecord: DriverKycApplication = {
       id: formData.id || `ind_${Date.now()}`,
-      driver_id: currentUser?.id || currentDriverId || 'drv_anand',
-      driver_name: currentUser?.name || formData.driver_name || 'Anand Gowda',
-      driver_email: currentUser?.email || formData.driver_email || 'anand.gowda@driver.sjttravels.com',
-      driver_phone: currentUser?.phone || formData.driver_phone || '+91 98450 12345',
+      driver_id: currentUser?.id || currentDriverId || formData.driver_id || `drv_${Date.now()}`,
+      driver_name: currentUser?.name || formData.driver_name || 'SJT Chauffeur',
+      driver_email: currentUser?.email || formData.driver_email || '',
+      driver_phone: currentUser?.phone || formData.driver_phone || '',
       vendor_name: formData.vendor_name || 'SJT Logistics Partner',
       father_name: formData.father_name || '',
       dob: formData.dob || '',
       education: formData.education || '',
-      experience_years: formData.experience_years || 5,
+      experience_years: formData.experience_years || 0,
       inducted_date: formData.inducted_date || new Date().toISOString().split('T')[0],
       photo_url: formData.photo_url || '',
       license_number: formData.license_number || '',
@@ -1064,8 +1081,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       medical_cert_date: formData.medical_cert_date || '',
       medical_cert_expiry: formData.medical_cert_expiry || '',
       bgv_agency_name: formData.bgv_agency_name || '',
-      duties_per_day: formData.duties_per_day || 2,
-      companies_serving: formData.companies_serving || 'JCPenney / SJT Corporate',
+      duties_per_day: formData.duties_per_day || '',
+      companies_serving: formData.companies_serving || '',
       emergency_contact_name: formData.emergency_contact_name || '',
       emergency_contact_phone: formData.emergency_contact_phone || '',
       reference_1_name: formData.reference_1_name || '',
@@ -1076,11 +1093,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       driver_signature_acknowledged: true,
       inspected_by: formData.inspected_by || 'SJT Inspection Officer',
       approved_by: formData.approved_by || 'Operations Admin',
-      vehicle_vendor_name: formData.vehicle_vendor_name || formData.vendor_name || 'SJT Logistics Partner',
-      vehicle_reg: formData.vehicle_reg || 'KA 05 AU 1234',
-      vehicle_type: formData.vehicle_type || 'Tempo Traveller (17 Seater)',
-      vehicle_model: formData.vehicle_model || 'Force Tempo Traveller 3350',
-      seating_capacity: formData.seating_capacity || 17,
+      vehicle_vendor_name: formData.vehicle_vendor_name || formData.vendor_name || 'SJT Fleet Partner',
+      vehicle_reg: formData.vehicle_reg || '',
+      vehicle_type: formData.vehicle_type || 'Commercial Fleet',
+      vehicle_model: formData.vehicle_model || '',
+      seating_capacity: formData.seating_capacity || 4,
       vehicle_ownership: formData.vehicle_ownership || 'ATTACHED',
       fuel_type: formData.fuel_type || 'Diesel',
       rc_number: formData.rc_number || '',

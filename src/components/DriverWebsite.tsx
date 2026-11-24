@@ -256,22 +256,33 @@ export const DriverWebsite: React.FC = () => {
   const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP' | 'STATUS'>('LOGIN');
 
   // Custom driver profile stored in local session
-  const [activeChauffeur, setActiveChauffeur] = useState<typeof PRESET_CHAUFFEURS[0]>(() => {
+  const [activeChauffeur, setActiveChauffeur] = useState<any>(() => {
     try {
       const saved = localStorage.getItem('sjt_active_chauffeur');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return PRESET_CHAUFFEURS[0];
+    return {
+      id: '',
+      name: '',
+      phone: '',
+      email: '',
+      vehicleReg: '',
+      vehicleType: '',
+      rating: '5.0 ★',
+      trips: '0 trips',
+      avatar: 'SC',
+      onboardedType: 'COMPANY_DUTY'
+    };
   });
 
-  // Login Form State
-  const [loginIdentifier, setLoginIdentifier] = useState(activeChauffeur.email);
-  const [loginPin, setLoginPin] = useState('driver123');
+  // Login Form State (Strictly empty - driver enters their own credentials)
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPin, setLoginPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
 
-  // Extended KYC & Induction Signup Form State
+  // Extended KYC & Induction Signup Form State (Starts clean with zero pre-filled dummy data)
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -280,15 +291,15 @@ export const DriverWebsite: React.FC = () => {
   const [regAadhaar, setRegAadhaar] = useState('');
   const [regPan, setRegPan] = useState('');
   const [regVehicleType, setRegVehicleType] = useState('Tempo Traveller (17 Seater)');
-  const [regVehicleReg, setRegVehicleReg] = useState('KA 05 AB 1234');
-  const [regMakeModel, setRegMakeModel] = useState('Force Tempo Traveller 3350');
-  const [regYear, setRegYear] = useState('2023');
-  const [regColor, setRegColor] = useState('Yellow Board / White');
-  const [regSeats, setRegSeats] = useState('17');
-  const [regBaseArea, setRegBaseArea] = useState('Bengaluru Commercial Belt');
+  const [regVehicleReg, setRegVehicleReg] = useState('');
+  const [regMakeModel, setRegMakeModel] = useState('');
+  const [regYear, setRegYear] = useState('');
+  const [regColor, setRegColor] = useState('');
+  const [regSeats, setRegSeats] = useState('');
+  const [regBaseArea, setRegBaseArea] = useState('');
   const [regDocs, setRegDocs] = useState<Record<string, { file_name: string; data?: string; expires_at?: string; status?: 'APPROVED' | 'PENDING' | 'REJECTED' }>>({});
   const [previewingImage, setPreviewingImage] = useState<{ title: string; url: string } | null>(null);
-  const [regPassword, setRegPassword] = useState('anand1234');
+  const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState('');
@@ -424,55 +435,55 @@ export const DriverWebsite: React.FC = () => {
     );
   };
 
-  // Extended Driver Induction Form fields
-  const [regVendorName, setRegVendorName] = useState('SJT Logistics & Travels Partner');
+  // Extended Driver Induction Form fields (All strictly start empty so driver enters their own details)
+  const [regVendorName, setRegVendorName] = useState('');
   const [regFatherName, setRegFatherName] = useState('');
-  const [regDob, setRegDob] = useState('1988-06-15');
-  const [regEducation, setRegEducation] = useState('Pre-University (PUC / 12th Pass)');
-  const [regTotalExp, setRegTotalExp] = useState('10');
-  const [regInductedDate, setRegInductedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [regFingerprintAck, setRegFingerprintAck] = useState(true);
-  const [regSignatureAck, setRegSignatureAck] = useState(true);
+  const [regDob, setRegDob] = useState('');
+  const [regEducation, setRegEducation] = useState('');
+  const [regTotalExp, setRegTotalExp] = useState('');
+  const [regInductedDate, setRegInductedDate] = useState('');
+  const [regFingerprintAck, setRegFingerprintAck] = useState(false);
+  const [regSignatureAck, setRegSignatureAck] = useState(false);
 
   // Driver Document Details with Dates
-  const [regDlIssueDate, setRegDlIssueDate] = useState('2018-05-20');
-  const [regDlExpiryDate, setRegDlExpiryDate] = useState('2038-05-19');
-  const [regBadgeIssueDate, setRegBadgeIssueDate] = useState('2019-02-10');
-  const [regBadgeExpiryDate, setRegBadgeExpiryDate] = useState('2029-02-09');
+  const [regDlIssueDate, setRegDlIssueDate] = useState('');
+  const [regDlExpiryDate, setRegDlExpiryDate] = useState('');
+  const [regBadgeIssueDate, setRegBadgeIssueDate] = useState('');
+  const [regBadgeExpiryDate, setRegBadgeExpiryDate] = useState('');
   const [regGovtIdType, setRegGovtIdType] = useState('Aadhaar');
-  const [regGovtIdIssueDate, setRegGovtIdIssueDate] = useState('2015-01-10');
-  const [regGovtIdExpiryDate, setRegGovtIdExpiryDate] = useState('2035-01-09');
-  const [regPoliceIssueDate, setRegPoliceIssueDate] = useState('2026-01-15');
-  const [regPoliceExpiryDate, setRegPoliceExpiryDate] = useState('2027-01-14');
-  const [regMedicalIssueDate, setRegMedicalIssueDate] = useState('2026-02-20');
-  const [regMedicalExpiryDate, setRegMedicalExpiryDate] = useState('2027-02-19');
-  const [regBgvAgency, setRegBgvAgency] = useState('AuthBridge Background Screening / SJT Internal Ops');
+  const [regGovtIdIssueDate, setRegGovtIdIssueDate] = useState('');
+  const [regGovtIdExpiryDate, setRegGovtIdExpiryDate] = useState('');
+  const [regPoliceIssueDate, setRegPoliceIssueDate] = useState('');
+  const [regPoliceExpiryDate, setRegPoliceExpiryDate] = useState('');
+  const [regMedicalIssueDate, setRegMedicalIssueDate] = useState('');
+  const [regMedicalExpiryDate, setRegMedicalExpiryDate] = useState('');
+  const [regBgvAgency, setRegBgvAgency] = useState('');
 
-  // Duties & References
-  const [regDutiesPerDay, setRegDutiesPerDay] = useState('2 Shifts (Morning Tech Park + Evening Drop)');
-  const [regCompaniesServing, setRegCompaniesServing] = useState('JCPenney Corporate Shuttle, Infosys, SJT Fleet');
-  const [regEmergencyContactName, setRegEmergencyContactName] = useState('Suma Gowda (Spouse)');
-  const [regEmergencyContactPhone, setRegEmergencyContactPhone] = useState('+91 98450 99881');
-  const [regRef1Name, setRegRef1Name] = useState('Manjunath Swamy (Fleet Supervisor)');
-  const [regRef1Phone, setRegRef1Phone] = useState('+91 99001 22334');
-  const [regRef2Name, setRegRef2Name] = useState('Suresh Patil (Senior Chauffeur)');
-  const [regRef2Phone, setRegRef2Phone] = useState('+91 97401 55667');
+  // Duties & References (Empty defaults - driver fills their own work schedule & references)
+  const [regDutiesPerDay, setRegDutiesPerDay] = useState('');
+  const [regCompaniesServing, setRegCompaniesServing] = useState('');
+  const [regEmergencyContactName, setRegEmergencyContactName] = useState('');
+  const [regEmergencyContactPhone, setRegEmergencyContactPhone] = useState('');
+  const [regRef1Name, setRegRef1Name] = useState('');
+  const [regRef1Phone, setRegRef1Phone] = useState('');
+  const [regRef2Name, setRegRef2Name] = useState('');
+  const [regRef2Phone, setRegRef2Phone] = useState('');
 
   // Vehicle Induction Form fields
   const [regOwnership, setRegOwnership] = useState<'ATTACHED' | 'OWNED'>('ATTACHED');
   const [regFuelType, setRegFuelType] = useState<'Diesel' | 'Petrol' | 'CNG' | 'EV'>('Diesel');
-  const [regRcIssueDate, setRegRcIssueDate] = useState('2023-03-12');
-  const [regRcExpiryDate, setRegRcExpiryDate] = useState('2038-03-11');
-  const [regInsuranceIssueDate, setRegInsuranceIssueDate] = useState('2026-08-16');
-  const [regInsuranceExpiryDate, setRegInsuranceExpiryDate] = useState('2027-08-15');
-  const [regFcIssueDate, setRegFcIssueDate] = useState('2024-03-01');
-  const [regFcExpiryDate, setRegFcExpiryDate] = useState('2026-02-28');
-  const [regPermitIssueDate, setRegPermitIssueDate] = useState('2023-07-01');
-  const [regPermitExpiryDate, setRegPermitExpiryDate] = useState('2028-06-30');
-  const [regTaxIssueDate, setRegTaxIssueDate] = useState('2026-04-01');
-  const [regTaxExpiryDate, setRegTaxExpiryDate] = useState('2027-03-31');
-  const [regEmissionIssueDate, setRegEmissionIssueDate] = useState('2026-06-15');
-  const [regEmissionExpiryDate, setRegEmissionExpiryDate] = useState('2026-12-14');
+  const [regRcIssueDate, setRegRcIssueDate] = useState('');
+  const [regRcExpiryDate, setRegRcExpiryDate] = useState('');
+  const [regInsuranceIssueDate, setRegInsuranceIssueDate] = useState('');
+  const [regInsuranceExpiryDate, setRegInsuranceExpiryDate] = useState('');
+  const [regFcIssueDate, setRegFcIssueDate] = useState('');
+  const [regFcExpiryDate, setRegFcExpiryDate] = useState('');
+  const [regPermitIssueDate, setRegPermitIssueDate] = useState('');
+  const [regPermitExpiryDate, setRegPermitExpiryDate] = useState('');
+  const [regTaxIssueDate, setRegTaxIssueDate] = useState('');
+  const [regTaxExpiryDate, setRegTaxExpiryDate] = useState('');
+  const [regEmissionIssueDate, setRegEmissionIssueDate] = useState('');
+  const [regEmissionExpiryDate, setRegEmissionExpiryDate] = useState('');
 
   // Safety Accessories Checklist (9 items with YES/NO)
   const [regAccessories, setRegAccessories] = useState<Record<string, boolean>>({
@@ -506,95 +517,6 @@ export const DriverWebsite: React.FC = () => {
   const [statusLookupLoading, setStatusLookupLoading] = useState(false);
   const [statusLookupError, setStatusLookupError] = useState('');
 
-  const fillSampleKycDocuments = () => {
-    setRegVendorName('SJT Logistics & Travels Partner');
-    setRegName('Anand Gowda');
-    setRegFatherName('Narayana Gowda');
-    setRegDob('1988-06-15');
-    setRegEducation('Pre-University (PUC / 12th Pass)');
-    setRegTotalExp('10');
-    setRegInductedDate(new Date().toISOString().split('T')[0]);
-    setRegPhone('+91 98450 12345');
-    setRegPassword('anand1234');
-    setRegEmail('anand.gowda@driver.sjttravels.com');
-    setRegDl('KA-04-2018-0091823');
-    setRegDlIssueDate('2018-05-20');
-    setRegDlExpiryDate('2038-05-19');
-    setRegBadge('PSV-BLR-88392');
-    setRegBadgeIssueDate('2019-02-10');
-    setRegBadgeExpiryDate('2029-02-09');
-    setRegGovtIdType('Aadhaar');
-    setRegAadhaar('5421 8892 1045');
-    setRegGovtIdIssueDate('2015-01-10');
-    setRegGovtIdExpiryDate('2035-01-09');
-    setRegPan('ABCDE1234F');
-    setRegPoliceIssueDate('2026-01-15');
-    setRegPoliceExpiryDate('2027-01-14');
-    setRegMedicalIssueDate('2026-02-20');
-    setRegMedicalExpiryDate('2027-02-19');
-    setRegBgvAgency('AuthBridge Background Screening / SJT Internal Ops');
-    setRegDutiesPerDay('2 Shifts (Morning Tech Park + Evening Drop)');
-    setRegCompaniesServing('JCPenney Corporate Shuttle, Infosys, SJT Fleet');
-    setRegEmergencyContactName('Suma Gowda (Spouse)');
-    setRegEmergencyContactPhone('+91 98450 99881');
-    setRegRef1Name('Manjunath Swamy (Fleet Supervisor)');
-    setRegRef1Phone('+91 99001 22334');
-    setRegRef2Name('Suresh Patil (Senior Chauffeur)');
-    setRegRef2Phone('+91 97401 55667');
-    setRegFingerprintAck(true);
-    setRegSignatureAck(true);
-
-    // Vehicle fields
-    setRegVehicleType('Tempo Traveller (17 Seater)');
-    setRegVehicleReg('KA 05 AU 1234');
-    setRegMakeModel('Force Tempo Traveller 3350 AC');
-    setRegYear('2023');
-    setRegColor('Yellow Board / White');
-    setRegSeats('17');
-    setRegOwnership('ATTACHED');
-    setRegFuelType('Diesel');
-    setRegBaseArea('Nagasandra, Outer Ring Road, Hebbal, Airport');
-    setRegRcIssueDate('2023-03-12');
-    setRegRcExpiryDate('2038-03-11');
-    setRegInsuranceIssueDate('2026-08-16');
-    setRegInsuranceExpiryDate('2027-08-15');
-    setRegFcIssueDate('2024-03-01');
-    setRegFcExpiryDate('2026-02-28');
-    setRegPermitIssueDate('2023-07-01');
-    setRegPermitExpiryDate('2028-06-30');
-    setRegTaxIssueDate('2026-04-01');
-    setRegTaxExpiryDate('2027-03-31');
-    setRegEmissionIssueDate('2026-06-15');
-    setRegEmissionExpiryDate('2026-12-14');
-
-    setRegAccessories({
-      fire_ext: true,
-      first_aid_kit: true,
-      co_sticker: true,
-      torch: true,
-      umbrella: true,
-      music_system: true,
-      mobile_handsfree: true,
-      fixed_gps: true,
-      fixed_panic_button: true
-    });
-
-    setRegVehicleCondition({
-      head_lights: true,
-      indicators: true,
-      body_rattle: true,
-      tyres: true,
-      spare_wheel: true,
-      interior_cleanliness: true,
-      seats_condition: true,
-      seat_belts: true,
-      tool_kit: true
-    });
-
-    const sampleDocs = getDefaultInductionDocuments('Anand Gowda', 'KA 05 AU 1234');
-    setRegDocs(sampleDocs);
-  };
-
   // Announcement Banner State
   const [showLaunchBanner, setShowLaunchBanner] = useState(true);
   const [showPreRegisterModal, setShowPreRegisterModal] = useState(false);
@@ -603,11 +525,11 @@ export const DriverWebsite: React.FC = () => {
 
   // Driver Identity Coordinates
   const isRealDriverUser = currentUser?.role === 'DRIVER';
-  const driverId = isRealDriverUser ? currentUser.id : (activeChauffeur.id || 'drv_ramesh');
-  const driverName = isRealDriverUser ? currentUser.name : (activeChauffeur.name || 'Ramesh Kumar');
-  const driverPhone = isRealDriverUser ? currentUser.phone : (activeChauffeur.phone || '+91 99009 75920');
-  const vehicleReg = activeChauffeur.vehicleReg || driverKyc?.assigned_vehicle_reg || driverKyc?.vehicle_reg || 'KA 05 AB 1234';
-  const vehicleType = activeChauffeur.vehicleType || driverKyc?.vehicle_type || 'Tempo Traveller (17 Seater)';
+  const driverId = isRealDriverUser ? currentUser.id : (activeChauffeur?.id || '');
+  const driverName = isRealDriverUser ? currentUser.name : (activeChauffeur?.name || 'SJT Chauffeur');
+  const driverPhone = isRealDriverUser ? currentUser.phone : (activeChauffeur?.phone || '');
+  const vehicleReg = (isRealDriverUser ? (currentUser.assigned_vehicle || (currentUser as any)?.vehicle_reg || driverKyc?.assigned_vehicle_reg || driverKyc?.vehicle_reg) : activeChauffeur?.vehicleReg) || (driverKyc?.assigned_vehicle_reg || driverKyc?.vehicle_reg || '');
+  const vehicleType = (isRealDriverUser ? (driverKyc?.vehicle_type || (currentUser as any)?.vehicle_type) : activeChauffeur?.vehicleType) || (driverKyc?.vehicle_type || 'Commercial Fleet');
 
   // Preset chauffeurs are pre-verified for demo testing. Real registered drivers MUST be approved by Admin.
   const isPresetChauffeur = PRESET_CHAUFFEURS.some(c => 
@@ -939,19 +861,19 @@ export const DriverWebsite: React.FC = () => {
         const customChauffeur = {
           id: loggedInUser.id,
           name: loggedInUser.name,
-          phone: loggedInUser.phone || '+91 99009 75920',
+          phone: loggedInUser.phone || identifier,
           email: loggedInUser.email,
-          vehicleReg: loggedInUser.assigned_vehicle || 'KA 05 AB 1234',
-          vehicleType: 'Tempo Traveller (17 Seater)',
+          vehicleReg: loggedInUser.assigned_vehicle || (currentUser as any)?.assigned_vehicle || '',
+          vehicleType: (loggedInUser as any).vehicle_type || 'Commercial Fleet',
           rating: '5.0 ★ (Fleet Partner)',
           trips: '0 trips',
-          avatar: loggedInUser.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+          avatar: loggedInUser.name ? loggedInUser.name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : 'SC',
           onboardedType: authDutyChoice
         };
         setActiveChauffeur(customChauffeur);
         localStorage.setItem('sjt_active_chauffeur', JSON.stringify(customChauffeur));
       } else {
-        const matched = PRESET_CHAUFFEURS.find(c => c.email.toLowerCase() === identifier.toLowerCase() || c.phone.includes(identifier));
+        const matched = PRESET_CHAUFFEURS.find(c => c.email.toLowerCase() === identifier.toLowerCase() || (identifier.length >= 7 && c.phone.includes(identifier)));
         if (matched) {
           setActiveChauffeur(matched);
           localStorage.setItem('sjt_active_chauffeur', JSON.stringify(matched));
@@ -1015,50 +937,50 @@ export const DriverWebsite: React.FC = () => {
         driver_id: registeredUser?.id || `drv_${cleanPhone.replace(/\D/g, '')}`,
         vendor_name: regVendorName.trim() || 'SJT Logistics Partner',
         driver_name: regName.trim(),
-        father_name: regFatherName.trim() || 'Narayana Gowda',
+        father_name: regFatherName.trim(),
         dob: regDob,
         education: regEducation,
-        experience_years: Number(regTotalExp) || 10,
-        inducted_date: regInductedDate,
+        experience_years: Number(regTotalExp) || 0,
+        inducted_date: regInductedDate || new Date().toISOString().split('T')[0],
         driver_phone: cleanPhone,
         driver_email: autoEmail,
-        license_number: regDl.trim() || 'KA-04-2018-0091823',
+        license_number: regDl.trim(),
         license_issue_date: regDlIssueDate,
         license_expiry_date: regDlExpiryDate,
-        badge_number: regBadge.trim() || 'PSV-BLR-88392',
+        badge_number: regBadge.trim(),
         badge_issue_date: regBadgeIssueDate,
         badge_expiry_date: regBadgeExpiryDate,
         govt_id_type: regGovtIdType,
-        govt_id_number: regGovtIdType === 'Aadhaar' ? (regAadhaar.trim() || '5421 8892 1045') : (regPan.trim() || 'ABCDE1234F'),
+        govt_id_number: regGovtIdType === 'Aadhaar' ? regAadhaar.trim() : regPan.trim(),
         govt_id_issue_date: regGovtIdIssueDate,
         govt_id_expiry_date: regGovtIdExpiryDate,
-        aadhar_number: regAadhaar.trim() || '5421 8892 1045',
-        pan_number: regPan.trim() || 'ABCDE1234F',
+        aadhar_number: regAadhaar.trim(),
+        pan_number: regPan.trim(),
         police_verification_date: regPoliceIssueDate,
         police_verification_expiry: regPoliceExpiryDate,
         medical_cert_date: regMedicalIssueDate,
         medical_cert_expiry: regMedicalExpiryDate,
-        bgv_agency_name: regBgvAgency,
-        duties_per_day: regDutiesPerDay,
-        companies_serving: regCompaniesServing,
-        emergency_contact_name: regEmergencyContactName,
-        emergency_contact_phone: regEmergencyContactPhone,
-        reference_1_name: regRef1Name,
-        reference_1_phone: regRef1Phone,
-        reference_2_name: regRef2Name,
-        reference_2_phone: regRef2Phone,
+        bgv_agency_name: regBgvAgency.trim(),
+        duties_per_day: regDutiesPerDay.trim(),
+        companies_serving: regCompaniesServing.trim(),
+        emergency_contact_name: regEmergencyContactName.trim(),
+        emergency_contact_phone: regEmergencyContactPhone.trim(),
+        reference_1_name: regRef1Name.trim(),
+        reference_1_phone: regRef1Phone.trim(),
+        reference_2_name: regRef2Name.trim(),
+        reference_2_phone: regRef2Phone.trim(),
         fingerprint_acknowledged: regFingerprintAck,
         driver_signature_acknowledged: regSignatureAck,
-        inspected_by: 'Raghavendra K - Safety Inspector',
-        approved_by: 'Master Operations Admin - Sharanu',
-        vehicle_vendor_name: regVendorName.trim() || 'SJT Logistics Partner',
-        vehicle_reg: regVehicleReg.trim().toUpperCase() || 'KA 05 AU 1234',
+        inspected_by: 'SJT Safety & Compliance Inspector',
+        approved_by: 'Master Operations Admin',
+        vehicle_vendor_name: regVendorName.trim() || 'SJT Fleet Partner',
+        vehicle_reg: regVehicleReg.trim().toUpperCase(),
         vehicle_type: regVehicleType,
-        vehicle_model: regMakeModel.trim() || 'Force Tempo Traveller 3350 AC',
-        seating_capacity: Number(regSeats) || 17,
+        vehicle_model: regMakeModel.trim(),
+        seating_capacity: Number(regSeats) || 4,
         vehicle_ownership: regOwnership,
         fuel_type: regFuelType,
-        rc_number: regVehicleReg.trim().toUpperCase() || 'KA 05 AU 1234',
+        rc_number: regVehicleReg.trim().toUpperCase(),
         rc_issue_date: regRcIssueDate,
         rc_expiry_date: regRcExpiryDate,
         insurance_issue_date: regInsuranceIssueDate,
@@ -1087,13 +1009,29 @@ export const DriverWebsite: React.FC = () => {
         name: regName.trim(),
         phone: cleanPhone,
         email: autoEmail,
-        vehicleReg: regVehicleReg.trim().toUpperCase() || 'KA 05 AU 1234',
+        vehicleReg: regVehicleReg.trim().toUpperCase(),
         vehicleType: regVehicleType,
         rating: '5.0 ★ (Pending Admin Audit)',
         trips: '0 trips',
-        avatar: regName.trim().slice(0, 2).toUpperCase(),
+        avatar: regName.trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'SC',
         onboardedType: authDutyChoice
       };
+
+      // Save to registered drivers list for offline/local resilience
+      try {
+        const existingList = JSON.parse(localStorage.getItem('sjt_registered_drivers') || '[]');
+        const updatedList = [
+          ...existingList.filter((d: any) => d.phone !== cleanPhone && d.id !== customChauffeur.id),
+          {
+            ...customChauffeur,
+            vehicle_reg: regVehicleReg.trim().toUpperCase(),
+            vehicle_type: regVehicleType,
+            password: regPassword.trim()
+          }
+        ];
+        localStorage.setItem('sjt_registered_drivers', JSON.stringify(updatedList));
+      } catch {}
+
       setActiveChauffeur(customChauffeur);
       localStorage.setItem('sjt_active_chauffeur', JSON.stringify(customChauffeur));
       localStorage.setItem('sjt_driver_logged_in', 'true');
@@ -1104,7 +1042,7 @@ export const DriverWebsite: React.FC = () => {
       setSubmittedKycResult({
         application_id: savedKyc?.id || `IND-BLR-${Math.floor(1000 + Math.random() * 9000)}`,
         driver_name: regName.trim(),
-        vehicle_reg: regVehicleReg.trim().toUpperCase() || 'KA 05 AU 1234',
+        vehicle_reg: regVehicleReg.trim().toUpperCase(),
         vehicle_type: regVehicleType,
         phone: cleanPhone,
         email: autoEmail,
@@ -1718,36 +1656,8 @@ export const DriverWebsite: React.FC = () => {
           {/* TAB A: CHAUFFEUR SIGN IN */}
           {authMode === 'LOGIN' && (
             <div className="space-y-5 animate-fade-in">
-              {/* Quick 1-Click Verified Chauffeur Presets */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  ⚡ 1-Click Quick Verified Chauffeur Sign In:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {PRESET_CHAUFFEURS.map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleSelectPresetChauffeur(p)}
-                      className="p-3 rounded-2xl bg-slate-800/80 hover:bg-blue-900/50 border border-slate-700 hover:border-blue-500 text-left transition-all group cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between text-xs font-black text-white group-hover:text-blue-300">
-                        <span>{p.name}</span>
-                        <span className="text-[10px] text-amber-400 font-bold">{p.rating}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">{p.vehicleReg}</div>
-                      <div className="text-[10px] text-emerald-400 font-medium truncate mt-0.5">{p.vehicleType}</div>
-                      <div className="mt-2 text-[10px] font-bold text-blue-400 group-hover:underline flex items-center gap-1">
-                        <span>Sign in as {p.name.split(' ')[0]}</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Custom Login Form */}
-              <form onSubmit={handleDriverLogin} className="space-y-4 pt-2 border-t border-slate-800">
+              {/* Chauffeur Credentials Login Form */}
+              <form onSubmit={handleDriverLogin} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1">
                     Chauffeur Mobile Number or Email
@@ -1759,7 +1669,7 @@ export const DriverWebsite: React.FC = () => {
                       required
                       value={loginIdentifier}
                       onChange={e => setLoginIdentifier(e.target.value)}
-                      placeholder="+91 99009 75920 or ramesh@driver.sjttravels.com"
+                      placeholder="Enter registered mobile number or email"
                       className="w-full pl-9 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
@@ -1776,7 +1686,7 @@ export const DriverWebsite: React.FC = () => {
                       required
                       value={loginPin}
                       onChange={e => setLoginPin(e.target.value)}
-                      placeholder="Enter chauffeur PIN"
+                      placeholder="Enter chauffeur password / PIN"
                       className="w-full pl-9 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-mono"
                     />
                     <button
@@ -1947,7 +1857,7 @@ export const DriverWebsite: React.FC = () => {
                           required
                           value={regVendorName}
                           onChange={e => setRegVendorName(e.target.value)}
-                          placeholder="e.g. SJT Logistics & Travels Partner"
+                          placeholder="Vendor / Transporter Name or Self"
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500"
                         />
                       </div>
@@ -1960,7 +1870,7 @@ export const DriverWebsite: React.FC = () => {
                           required
                           value={regName}
                           onChange={e => setRegName(e.target.value)}
-                          placeholder="e.g. Anand Gowda"
+                          placeholder="Full Name as per DL / Aadhaar"
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500"
                         />
                       </div>
@@ -1973,7 +1883,7 @@ export const DriverWebsite: React.FC = () => {
                           required
                           value={regFatherName}
                           onChange={e => setRegFatherName(e.target.value)}
-                          placeholder="e.g. Narayana Gowda"
+                          placeholder="Father's Full Name"
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500"
                         />
                       </div>
@@ -2733,7 +2643,7 @@ export const DriverWebsite: React.FC = () => {
                           type="text"
                           value={regDutiesPerDay}
                           onChange={e => setRegDutiesPerDay(e.target.value)}
-                          placeholder="e.g. 2 Shifts (Morning Tech Park + Evening Drop)"
+                          placeholder="e.g. 1 Shift, 2 Shifts, or General Shift"
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:border-blue-500"
                         />
                       </div>
@@ -2745,7 +2655,7 @@ export const DriverWebsite: React.FC = () => {
                           type="text"
                           value={regCompaniesServing}
                           onChange={e => setRegCompaniesServing(e.target.value)}
-                          placeholder="e.g. JCPenney Corporate Shuttle, Infosys, SJT Fleet"
+                          placeholder="e.g. Corporate Client / Tech Park / SJT Fleet"
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:border-blue-500"
                         />
                       </div>
@@ -2757,7 +2667,7 @@ export const DriverWebsite: React.FC = () => {
                           type="text"
                           value={regEmergencyContactName}
                           onChange={e => setRegEmergencyContactName(e.target.value)}
-                          placeholder="e.g. Suma Gowda (Spouse)"
+                          placeholder="Spouse / Parent / Family Contact Name"
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:border-blue-500"
                         />
                       </div>
@@ -2769,7 +2679,7 @@ export const DriverWebsite: React.FC = () => {
                           type="tel"
                           value={regEmergencyContactPhone}
                           onChange={e => setRegEmergencyContactPhone(e.target.value)}
-                          placeholder="e.g. +91 98450 99881"
+                          placeholder="10-digit emergency mobile number"
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:border-blue-500"
                         />
                       </div>
@@ -2782,14 +2692,14 @@ export const DriverWebsite: React.FC = () => {
                             type="text"
                             value={regRef1Name}
                             onChange={e => setRegRef1Name(e.target.value)}
-                            placeholder="Name"
+                            placeholder="Reference 1 Name"
                             className="w-1/2 px-2.5 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
                           />
                           <input
                             type="tel"
                             value={regRef1Phone}
                             onChange={e => setRegRef1Phone(e.target.value)}
-                            placeholder="Phone"
+                            placeholder="Mobile No."
                             className="w-1/2 px-2.5 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
                           />
                         </div>
@@ -2803,14 +2713,14 @@ export const DriverWebsite: React.FC = () => {
                             type="text"
                             value={regRef2Name}
                             onChange={e => setRegRef2Name(e.target.value)}
-                            placeholder="Name"
+                            placeholder="Reference 2 Name"
                             className="w-1/2 px-2.5 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
                           />
                           <input
                             type="tel"
                             value={regRef2Phone}
                             onChange={e => setRegRef2Phone(e.target.value)}
-                            placeholder="Phone"
+                            placeholder="Mobile No."
                             className="w-1/2 px-2.5 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
                           />
                         </div>
@@ -2905,7 +2815,7 @@ export const DriverWebsite: React.FC = () => {
                         🎉 Congratulations! Your Driver Account is ACTIVE
                       </div>
                       <p className="text-[11px] text-slate-300">
-                        Assigned Yellow-Board Vehicle: <strong className="font-mono text-amber-300">{statusLookupResult.assigned_vehicle_reg || 'KA 05 AB 1234'}</strong>.
+                        Assigned Yellow-Board Vehicle: <strong className="font-mono text-amber-300">{statusLookupResult.assigned_vehicle_reg || statusLookupResult.vehicle_reg || 'Verified by Admin'}</strong>.
                         Please use the Login ID and Password provided by SJT Admin to sign in.
                       </p>
                       <button
@@ -2980,7 +2890,7 @@ export const DriverWebsite: React.FC = () => {
             <div className="flex items-center justify-between gap-2 min-w-0">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-[#ED1735] to-rose-600 flex items-center justify-center text-white shadow-md shadow-red-900/30 font-black text-xs sm:text-sm shrink-0">
-                  {activeChauffeur.avatar || 'SJT'}
+                  {driverName ? driverName.split(' ').filter(Boolean).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : (activeChauffeur.avatar || 'SC')}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 sm:gap-2">

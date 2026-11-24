@@ -210,10 +210,10 @@ export const DriverPortal: React.FC = () => {
   const [driverEnteredOtp, setDriverEnteredOtp] = useState<string>('');
 
   // Driver Identity state
-  const [driverName, setDriverName] = useState(currentDriver?.name || 'Ramesh Kumar');
-  const [driverPhone, setDriverPhone] = useState(currentDriver?.phone || '+91 98765 43210');
-  const [vehicleReg, setVehicleReg] = useState('KA 05 AB 1234');
-  const [vehicleType, setVehicleType] = useState('Tempo Traveller (17 Seater)');
+  const [driverName, setDriverName] = useState(currentUser?.name || currentDriver?.name || 'SJT Chauffeur');
+  const [driverPhone, setDriverPhone] = useState(currentUser?.phone || currentDriver?.phone || '');
+  const [vehicleReg, setVehicleReg] = useState(currentUser?.assigned_vehicle || currentDriver?.assignedVehicleReg || '');
+  const [vehicleType, setVehicleType] = useState((currentDriver as any)?.vehicleType || 'Commercial Fleet');
   const [isOnline, setIsOnline] = useState(false);
   const [serviceArea, setServiceArea] = useState('');
   const [availableRides, setAvailableRides] = useState<any[]>([]);
@@ -1569,11 +1569,11 @@ export const DriverPortal: React.FC = () => {
                 <div className="px-5 pt-3 pb-2 flex items-center justify-between border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs border shadow-sm">
-                      RK
+                      {driverName.slice(0, 2).toUpperCase()}
                     </div>
                     <div>
                       <h4 className="font-black text-xs text-slate-800 leading-tight">Hello {driverName}</h4>
-                      <span className="text-[10px] text-slate-400 font-mono">KA 05 AB 1234 • Tempo Traveller</span>
+                      <span className="text-[10px] text-slate-400 font-mono">{vehicleReg || 'Verified Vehicle'} • {vehicleType || 'Commercial Fleet'}</span>
                     </div>
                   </div>
 
