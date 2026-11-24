@@ -376,11 +376,29 @@ export const DriverPortal: React.FC = () => {
   const displayTime = (value?: string) => value ? value : 'Not recorded';
   const canTakeDailyTrips = currentUser?.role === 'DRIVER' && driverTypeChoice === 'REGULAR' && !activeDuty && isOnline;
   const handleDriverModeSwitch = () => {
-    if (activeDuty) return;
-    const nextMode = driverTypeChoice === 'REGULAR' ? 'COMPANY_DUTY' : 'REGULAR';
-    setDriverTypeChoice(nextMode);
-    if (nextMode === 'COMPANY_DUTY' && isOnline) void saveDriverAvailability(false);
-    if (currentUser?.id) localStorage.setItem(`sjt_driver_mode_${currentUser.id}`, nextMode);
+    if (activeDuty) {
+      alert('You have an active company duty shift running. Please complete check-out before switching to Daily Trips.');
+      return;
+    }
+    const onboardedType = localStorage.getItem('sjt_driver_onboarded_type') || (currentUser?.duty_mode === 'REGULAR' ? 'REGULAR' : 'COMPANY_DUTY');
+    if (driverTypeChoice === 'REGULAR') {
+      // Trying to switch to COMPANY_DUTY
+      if (onboardedType === 'REGULAR') {
+        alert('Company Duty is locked. You are onboarded for Daily Passenger Trips only. To perform corporate company duties, complete the Corporate Induction KYC Dossier and vehicle clearance.');
+        return;
+      }
+      setDriverTypeChoice('COMPANY_DUTY');
+      if (isOnline) void saveDriverAvailability(false);
+      if (currentUser?.id) localStorage.setItem(`sjt_driver_mode_${currentUser.id}`, 'COMPANY_DUTY');
+    } else {
+      // Trying to switch to REGULAR
+      if (todayCompletedShiftsCount === 0) {
+        alert('Shift Duty Required: As an onboarded Corporate Company Duty Chauffeur, you have assigned corporate shifts today. Complete your assigned company duty shifts before switching to Daily Passenger Trips.');
+        return;
+      }
+      setDriverTypeChoice('REGULAR');
+      if (currentUser?.id) localStorage.setItem(`sjt_driver_mode_${currentUser.id}`, 'REGULAR');
+    }
   };
 
   useEffect(() => {
@@ -823,7 +841,7 @@ export const DriverPortal: React.FC = () => {
   };
 
   return (
-    <div className="py-6 px-3 min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-start font-sans">
+    <div className="py-6 px-3 min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-start font-sans w-full max-w-full overflow-x-hidden">
       {/* If Showcase Mode: Show Top Header & Slide Quick Switcher */}
       {!standaloneMode && (
         <div className="w-full max-w-5xl mb-4 bg-slate-800/80 backdrop-blur-md p-4 rounded-2xl border border-slate-700 shadow-xl">

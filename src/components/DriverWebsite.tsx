@@ -75,7 +75,8 @@ const PRESET_CHAUFFEURS = [
     vehicleType: 'Tempo Traveller (17 Seater)',
     rating: '4.9 ★',
     trips: '1,420 trips',
-    avatar: 'RK'
+    avatar: 'RK',
+    onboardedType: 'COMPANY_DUTY' as const
   },
   {
     id: 'drv_suresh',
@@ -86,7 +87,8 @@ const PRESET_CHAUFFEURS = [
     vehicleType: 'Toyota Innova Crysta',
     rating: '4.8 ★',
     trips: '980 trips',
-    avatar: 'SG'
+    avatar: 'SG',
+    onboardedType: 'REGULAR' as const // Inducted strictly for Daily Trips (Locked from Company Duty)
   },
   {
     id: 'drv_manjunath',
@@ -97,7 +99,8 @@ const PRESET_CHAUFFEURS = [
     vehicleType: 'Maruti Suzuki Ertiga',
     rating: '4.9 ★',
     trips: '1,150 trips',
-    avatar: 'MR'
+    avatar: 'MR',
+    onboardedType: 'COMPANY_DUTY' as const
   }
 ];
 
@@ -215,6 +218,30 @@ export const DriverWebsite: React.FC = () => {
 
   // Working Mode chosen during Login / Signup
   const [authDutyChoice, setAuthDutyChoice] = useState<'COMPANY_DUTY' | 'REGULAR'>(driverMode);
+
+  // Driver Onboarding Type: 'COMPANY_DUTY' (Corporate Chauffeur) | 'REGULAR' (Daily Trips Only)
+  const [driverOnboardedType, setDriverOnboardedType] = useState<'COMPANY_DUTY' | 'REGULAR'>(() => {
+    const saved = localStorage.getItem('sjt_driver_onboarded_type') as 'COMPANY_DUTY' | 'REGULAR';
+    if (saved === 'REGULAR' || saved === 'COMPANY_DUTY') return saved;
+    try {
+      const savedChauffeur = localStorage.getItem('sjt_active_chauffeur');
+      if (savedChauffeur) {
+        const parsed = JSON.parse(savedChauffeur);
+        if (parsed.onboardedType) return parsed.onboardedType;
+      }
+    } catch {}
+    return 'COMPANY_DUTY';
+  });
+
+  // Duty Alert & Access Restriction Modal State
+  const [dutyAlertModal, setDutyAlertModal] = useState<{
+    isOpen: boolean;
+    type: 'DAILY_TRIPS_LOCKED' | 'CORPORATE_SHIFT_PENDING' | 'ACTIVE_SHIFT_RUNNING';
+    title: string;
+    message: string;
+    actionLabel?: string;
+    onAction?: () => void;
+  } | null>(null);
 
   // Active Navigation Tab: 'SHIFTS' | 'TRIPS' | 'OVERVIEW' | 'HISTORY' | 'KYC' | 'COMPLETED_TRIPS'
   const [activeTab, setActiveTab] = useState<'SHIFTS' | 'TRIPS' | 'OVERVIEW' | 'HISTORY' | 'KYC' | 'COMPLETED_TRIPS'>(() => {
@@ -802,27 +829,80 @@ export const DriverWebsite: React.FC = () => {
 
   // Mode Switching Handler
   const handleSwitchMode = (targetMode: 'COMPANY_DUTY' | 'REGULAR') => {
-    if (targetMode === 'REGULAR' && activeDuty) {
-      const confirmSwitch = window.confirm(
-        'You have an active Company Duty shift running. Please complete your shift or confirm to switch to Daily Passenger Trips.'
-      );
-      if (!confirmSwitch) return;
+    // 1. Trying to switch to COMPANY_DUTY
+    if (targetMode === 'COMPANY_DUTY') {
+      if (driverOnboardedType === 'REGULAR') {
+        // Daily Trips driver CANNOT switch to Company Duty without corporate induction dossier
+        setDutyAlertModal({
+          isOpen: true,
+          type: 'DAILY_TRIPS_LOCKED',
+          title: 'Corporate Company Duty Locked',
+          message: 'You are currently onboarded for Daily Passenger Trips only. Corporate company duties require complete Corporate Fleet Induction KYC, JCPenney/SJT client badges, and 18-point vehicle clearance.',
+          actionLabel: 'View Corporate KYC Dossier',
+          onAction: () => {
+            setActiveTab('KYC');
+            setDutyAlertModal(null);
+          }
+        });
+        return;
+      }
+      setDriverMode('COMPANY_DUTY');
+      setActiveTab('SHIFTS');
+      localStorage.setItem('sjt_driver_mode', 'COMPANY_DUTY');
+      return;
     }
 
-    setDriverMode(targetMode);
-    setActiveTab(targetMode === 'COMPANY_DUTY' ? 'SHIFTS' : 'TRIPS');
-    localStorage.setItem('sjt_driver_mode', targetMode);
+    // 2. Trying to switch to REGULAR (Daily Trips)
+    if (targetMode === 'REGULAR') {
+      if (activeDuty) {
+        setDutyAlertModal({
+          isOpen: true,
+          type: 'ACTIVE_SHIFT_RUNNING',
+          title: 'Active Corporate Shift in Progress',
+          message: `You are currently on active shift: ${activeDuty.companyName || activeDuty.company_name || 'Corporate Duty'} (${activeDuty.shiftName || 'Shift'}). Please complete and check out of your active shift before switching to Daily Passenger Trips.`,
+          actionLabel: 'Go to Shift Console',
+          onAction: () => {
+            setActiveTab('SHIFTS');
+            setDutyAlertModal(null);
+          }
+        });
+        return;
+      }
+
+      if (todayCompletedShiftsCount === 0) {
+        setDutyAlertModal({
+          isOpen: true,
+          type: 'CORPORATE_SHIFT_PENDING',
+          title: 'Corporate Duty Shift Pending',
+          message: 'As an onboarded Corporate Company Duty Chauffeur, you have assigned corporate shifts today. Complete your assigned company duty shifts before switching to Daily Passenger Trips.',
+          actionLabel: 'Start Shift 1 Duty Now',
+          onAction: () => {
+            setActiveTab('SHIFTS');
+            setDutyAlertModal(null);
+          }
+        });
+        return;
+      }
+
+      // All assigned corporate shifts completed! Switch to Daily Trips allowed!
+      setDriverMode('REGULAR');
+      setActiveTab('TRIPS');
+      localStorage.setItem('sjt_driver_mode', 'REGULAR');
+    }
   };
 
   // Quick Preset Chauffeur Select
   const handleSelectPresetChauffeur = async (p: typeof PRESET_CHAUFFEURS[0]) => {
     setActiveChauffeur(p);
     setLoginIdentifier(p.email);
-    setDriverMode(authDutyChoice);
-    setActiveTab(authDutyChoice === 'COMPANY_DUTY' ? 'SHIFTS' : 'TRIPS');
+    const chosenOnboardType = (p as any).onboardedType || authDutyChoice || 'COMPANY_DUTY';
+    setDriverOnboardedType(chosenOnboardType);
+    setDriverMode(chosenOnboardType);
+    setActiveTab(chosenOnboardType === 'COMPANY_DUTY' ? 'SHIFTS' : 'TRIPS');
     localStorage.setItem('sjt_active_chauffeur', JSON.stringify(p));
     localStorage.setItem('sjt_driver_logged_in', 'true');
-    localStorage.setItem('sjt_driver_mode', authDutyChoice);
+    localStorage.setItem('sjt_driver_mode', chosenOnboardType);
+    localStorage.setItem('sjt_driver_onboarded_type', chosenOnboardType);
     setShowAuthGate(false);
     try {
       await login(p.email, 'driver123', 'DRIVER', 'DRIVER_WEB');
@@ -865,7 +945,8 @@ export const DriverWebsite: React.FC = () => {
           vehicleType: 'Tempo Traveller (17 Seater)',
           rating: '5.0 ★ (Fleet Partner)',
           trips: '0 trips',
-          avatar: loggedInUser.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+          avatar: loggedInUser.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+          onboardedType: authDutyChoice
         };
         setActiveChauffeur(customChauffeur);
         localStorage.setItem('sjt_active_chauffeur', JSON.stringify(customChauffeur));
@@ -877,10 +958,13 @@ export const DriverWebsite: React.FC = () => {
         }
       }
 
-      setDriverMode(authDutyChoice);
-      setActiveTab(authDutyChoice === 'COMPANY_DUTY' ? 'SHIFTS' : 'TRIPS');
+      const chosenOnboardType = authDutyChoice;
+      setDriverOnboardedType(chosenOnboardType);
+      setDriverMode(chosenOnboardType);
+      setActiveTab(chosenOnboardType === 'COMPANY_DUTY' ? 'SHIFTS' : 'TRIPS');
       localStorage.setItem('sjt_driver_logged_in', 'true');
-      localStorage.setItem('sjt_driver_mode', authDutyChoice);
+      localStorage.setItem('sjt_driver_mode', chosenOnboardType);
+      localStorage.setItem('sjt_driver_onboarded_type', chosenOnboardType);
       await refreshDriverKyc();
       await refreshData(true);
       setShowAuthGate(false);
@@ -1007,11 +1091,14 @@ export const DriverWebsite: React.FC = () => {
         vehicleType: regVehicleType,
         rating: '5.0 ★ (Pending Admin Audit)',
         trips: '0 trips',
-        avatar: regName.trim().slice(0, 2).toUpperCase()
+        avatar: regName.trim().slice(0, 2).toUpperCase(),
+        onboardedType: authDutyChoice
       };
       setActiveChauffeur(customChauffeur);
       localStorage.setItem('sjt_active_chauffeur', JSON.stringify(customChauffeur));
       localStorage.setItem('sjt_driver_logged_in', 'true');
+      setDriverOnboardedType(authDutyChoice);
+      localStorage.setItem('sjt_driver_onboarded_type', authDutyChoice);
       localStorage.setItem('sjt_driver_mode', authDutyChoice);
 
       setSubmittedKycResult({
@@ -2881,66 +2968,103 @@ export const DriverWebsite: React.FC = () => {
   // VIEW 2: MAIN DRIVER WEBSITE COCKPIT
   // =========================================================================
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans w-full max-w-full overflow-x-hidden">
       {/* ============================================================ */}
-      {/* 1. TOP HEADER & DESKTOP NAVIGATION BAR */}
+      {/* 1. TOP HEADER & DESKTOP NAVIGATION BAR (RESPONSIVE & ZERO-OVERFLOW) */}
       {/* ============================================================ */}
-      <header className="sticky top-0 z-40 bg-[#071B49] border-b border-blue-900/60 shadow-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Left: Branding, Driver Identity & Current Mode Badge */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#ED1735] to-rose-600 flex items-center justify-center text-white shadow-md shadow-red-900/30 font-black">
-                {activeChauffeur.avatar || 'SJT'}
+      <header className="sticky top-0 z-40 bg-[#071B49] border-b border-blue-900/60 shadow-xl w-full max-w-full overflow-hidden">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          {/* Top Row: Responsive Layout (Zero horizontal overflow on mobile) */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-2.5 sm:py-0 sm:h-16 gap-2">
+            {/* Top Bar for Mobile / Left Section for Desktop */}
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-[#ED1735] to-rose-600 flex items-center justify-center text-white shadow-md shadow-red-900/30 font-black text-xs sm:text-sm shrink-0">
+                  {activeChauffeur.avatar || 'SJT'}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <h1 className="text-xs sm:text-base font-black tracking-wide text-white truncate">SJT DRIVERS</h1>
+                    <span className="bg-emerald-500/20 text-emerald-400 text-[9px] sm:text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border border-emerald-500/30 shrink-0">
+                      WEB
+                    </span>
+                    {/* Mode Pill in Title */}
+                    <span className={`text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shrink-0 ${
+                      driverMode === 'COMPANY_DUTY'
+                        ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                    }`}>
+                      {driverMode === 'COMPANY_DUTY' ? <Building2 className="w-3 h-3" /> : <Car className="w-3 h-3" />}
+                      <span>{driverMode === 'COMPANY_DUTY' ? 'Company Duty' : 'Daily Trips'}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-blue-200 font-mono truncate">
+                    <span className="font-bold text-white truncate">{driverName}</span>
+                    <span className="text-slate-400">•</span>
+                    <span className="text-amber-300 font-bold shrink-0">{vehicleReg}</span>
+                    <span className="text-slate-400 hidden sm:inline">•</span>
+                    <span className="hidden sm:inline text-slate-300">{vehicleType}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base font-black tracking-wide text-white">SJT DRIVER PORTAL</h1>
-                  <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30">
-                    WEB EDITION
-                  </span>
-                  {/* Mode Pill in Title */}
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 ${
-                    driverMode === 'COMPANY_DUTY'
-                      ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
-                  }`}>
-                    {driverMode === 'COMPANY_DUTY' ? <Building2 className="w-3 h-3" /> : <Car className="w-3 h-3" />}
-                    <span>{driverMode === 'COMPANY_DUTY' ? 'Company Duty' : 'Daily Trips'}</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-blue-200 font-mono">
-                  <span className="font-bold text-white">{driverName}</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="text-amber-300 font-bold">{vehicleReg}</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="hidden sm:inline">{vehicleType}</span>
-                </div>
+
+              {/* Mobile Right: Quick Action Buttons (Sync, Logout) */}
+              <div className="flex sm:hidden items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => refreshData()}
+                  className="p-1.5 rounded-lg bg-slate-800 text-blue-400 border border-slate-700 active:scale-95"
+                  title="Sync bookings"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDriverSignOut}
+                  className="p-1.5 rounded-lg bg-slate-800 text-rose-400 border border-slate-700 active:scale-95"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
 
-            {/* Right: Switch Mode Button, Availability, Simulator & Switch Chauffeur */}
-            <div className="flex items-center gap-2.5">
-              {/* PROMINENT DYNAMIC MODE SWITCHER BUTTON */}
+            {/* Actions: Switch Mode & Availability (Full-width row on mobile, right side on desktop) */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+              {/* Dynamic Mode Switcher Button */}
               <button
                 type="button"
                 onClick={() => handleSwitchMode(driverMode === 'COMPANY_DUTY' ? 'REGULAR' : 'COMPANY_DUTY')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md cursor-pointer ${
+                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer active:scale-95 ${
                   driverMode === 'COMPANY_DUTY'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-900/40 ring-1 ring-emerald-400/50'
-                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-900/40 ring-1 ring-blue-400/50'
+                    ? todayCompletedShiftsCount > 0
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white shadow-emerald-900/40 ring-1 ring-emerald-400/50'
+                      : 'bg-gradient-to-r from-slate-800 to-blue-900/80 hover:from-slate-700 text-blue-200 border border-blue-500/30'
+                    : driverOnboardedType === 'REGULAR'
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white shadow-blue-900/40 ring-1 ring-blue-400/50'
                 }`}
                 title={driverMode === 'COMPANY_DUTY' ? 'Switch to Daily Passenger Trips Driver' : 'Switch to Corporate Company Duty Shifts'}
               >
                 {driverMode === 'COMPANY_DUTY' ? (
                   <>
-                    <Car className="w-3.5 h-3.5" />
-                    <span>Switch to Daily Trips ➔</span>
+                    <Car className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {activeDuty 
+                        ? 'Shift Active (Check Out First)' 
+                        : todayCompletedShiftsCount > 0 
+                        ? '✨ All Shifts Done • Daily Trips ➔' 
+                        : '🔒 Shift 1 Pending • Daily Trips'}
+                    </span>
                   </>
                 ) : (
                   <>
-                    <Building2 className="w-3.5 h-3.5" />
-                    <span>Switch to Company Duty ➔</span>
+                    <Building2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {driverOnboardedType === 'REGULAR'
+                        ? '🔒 Company Duty (KYC Required)'
+                        : 'Switch to Company Duty ➔'}
+                    </span>
                   </>
                 )}
               </button>
@@ -2950,54 +3074,52 @@ export const DriverWebsite: React.FC = () => {
                 type="button"
                 onClick={() => void saveDriverAvailability(!isOnline)}
                 disabled={availabilitySaving}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border shadow-sm cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 border shadow-sm cursor-pointer shrink-0 active:scale-95 ${
                   isOnline 
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30' 
                     : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
               >
                 <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
-                <span className="hidden sm:inline">{isOnline ? 'Online (Ready)' : 'Offline'}</span>
+                <span>{isOnline ? 'Online' : 'Offline'}</span>
               </button>
 
-              {/* Live Bookings Sync Button */}
+              {/* Desktop-only action buttons */}
               <button
                 type="button"
                 onClick={() => refreshData()}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="hidden sm:flex px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                 title="Sync with server for live customer bookings"
               >
                 <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
-                <span className="hidden md:inline">Sync Bookings</span>
+                <span className="hidden md:inline">Sync</span>
               </button>
 
-              {/* Switch Chauffeur Account */}
               <button
                 type="button"
                 onClick={handleDriverSignOut}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                className="hidden sm:flex px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-all cursor-pointer items-center gap-1"
                 title="Switch Chauffeur Profile or Sign Out"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Logout</span>
+                <span className="hidden md:inline">Logout</span>
               </button>
 
-              {/* Customer Web Switcher */}
               <a
                 href="https://sjttarvels.vercel.app/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                className="hidden md:flex px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-all cursor-pointer items-center gap-1"
                 title="Open Customer Website"
               >
                 <Monitor className="w-3.5 h-3.5 text-blue-400" />
-                <span className="hidden md:inline">Customer Website</span>
+                <span>Customer Web</span>
               </a>
             </div>
           </div>
 
           {/* Desktop Navigation Tabs: DYNAMIC BASED ON DRIVER MODE */}
-          <nav className="flex items-center gap-1 overflow-x-auto py-2 border-t border-blue-900/40 scrollbar-none">
+          <nav className="flex items-center gap-1 overflow-x-auto py-2 border-t border-blue-900/40 scrollbar-none w-full max-w-full">
             {currentNavTabs.map(tab => (
               <button
                 key={tab.id}
@@ -5280,6 +5402,70 @@ export const DriverWebsite: React.FC = () => {
               >
                 <Check className="w-5 h-5 stroke-[3]" />
                 <span>{acceptingRideId ? 'Accepting...' : 'ACCEPT RIDE NOW'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* DUTY PROFILE ACCESS RESTRICTION / SHIFT PENDING MODAL */}
+      {/* ============================================================ */}
+      {dutyAlertModal && dutyAlertModal.isOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+          onClick={() => setDutyAlertModal(null)}
+        >
+          <div 
+            className="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-3xl p-6 shadow-2xl space-y-4 relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                dutyAlertModal.type === 'DAILY_TRIPS_LOCKED'
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              }`}>
+                {dutyAlertModal.type === 'DAILY_TRIPS_LOCKED' ? (
+                  <Lock className="w-6 h-6" />
+                ) : (
+                  <AlertCircle className="w-6 h-6" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-white">{dutyAlertModal.title}</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">{dutyAlertModal.message}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
+              <div className="font-bold text-white flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                <span>SJT Operations Dispatch Rule</span>
+              </div>
+              <p>
+                {dutyAlertModal.type === 'DAILY_TRIPS_LOCKED'
+                  ? 'Drivers inducted for Daily Trips cannot accept corporate client duties without complete KYC dossier & MNC client approval.'
+                  : 'Corporate drivers must complete scheduled company shifts today before being released for on-demand public ride bookings.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              {dutyAlertModal.actionLabel && (
+                <button
+                  type="button"
+                  onClick={dutyAlertModal.onAction}
+                  className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white rounded-xl text-xs font-black shadow-lg cursor-pointer transition-all active:scale-95"
+                >
+                  {dutyAlertModal.actionLabel}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setDutyAlertModal(null)}
+                className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>
