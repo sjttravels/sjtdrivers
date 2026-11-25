@@ -439,7 +439,8 @@ export const DriverWebsite: React.FC = () => {
   const [regVendorName, setRegVendorName] = useState('');
   const [regFatherName, setRegFatherName] = useState('');
   const [regDob, setRegDob] = useState('');
-  const [regEducation, setRegEducation] = useState('');
+  const [regEducation, setRegEducation] = useState('SSLC / 10th Standard');
+  const [regOtherEducation, setRegOtherEducation] = useState('');
   const [regTotalExp, setRegTotalExp] = useState('');
   const [regInductedDate, setRegInductedDate] = useState('');
   const [regFingerprintAck, setRegFingerprintAck] = useState(false);
@@ -921,6 +922,9 @@ export const DriverWebsite: React.FC = () => {
       if (!regPassword.trim() || regPassword.trim().length < 4) {
         throw new Error('Please create a driver password or PIN of at least 4 characters.');
       }
+      if (regEducation === 'Others' && !regOtherEducation.trim()) {
+        throw new Error('Please enter your education qualification in the Others field.');
+      }
       
       const cleanPhone = regPhone.trim();
       const autoEmail = regEmail.trim() || `driver.${cleanPhone.replace(/\D/g, '')}@sjttravels.com`;
@@ -952,7 +956,7 @@ export const DriverWebsite: React.FC = () => {
         driver_name: regName.trim(),
         father_name: regFatherName.trim(),
         dob: regDob,
-        education: regEducation,
+        education: regEducation === 'Others' ? regOtherEducation.trim() : (regEducation || 'SSLC / 10th Standard'),
         experience_years: Number(regTotalExp) || 0,
         inducted_date: regInductedDate || new Date().toISOString().split('T')[0],
         driver_phone: cleanPhone,
@@ -1941,14 +1945,27 @@ export const DriverWebsite: React.FC = () => {
                         </label>
                         <select
                           value={regEducation}
-                          onChange={e => setRegEducation(e.target.value)}
+                          onChange={e => {
+                            setRegEducation(e.target.value);
+                            if (e.target.value !== 'Others') setRegOtherEducation('');
+                          }}
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:border-blue-500"
                         >
                           <option value="SSLC / 10th Standard">SSLC / 10th Standard</option>
                           <option value="Pre-University (PUC / 12th Pass)">Pre-University (PUC / 12th Pass)</option>
                           <option value="Diploma / ITI">Diploma / ITI</option>
-                          <option value="Graduate (BA / B.Com / B.Sc)">Graduate (BA / B.Com / B.Sc)</option>
+                          <option value="Others">Others</option>
                         </select>
+                        {regEducation === 'Others' && (
+                          <input
+                            type="text"
+                            required
+                            value={regOtherEducation}
+                            onChange={e => setRegOtherEducation(e.target.value)}
+                            placeholder="Enter your education qualification"
+                            className="mt-2 w-full px-3 py-2 bg-slate-800 border border-blue-500/50 rounded-xl text-xs font-bold text-white placeholder-slate-400 outline-none focus:border-blue-400"
+                          />
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-300 mb-1">
