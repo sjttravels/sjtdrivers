@@ -193,6 +193,7 @@ export const DriverWebsite: React.FC = () => {
     currentDriver, 
     currentUser,
     driverKyc,
+    kycRequests,
     refreshDriverKyc,
     submitDriverKyc,
     drivers, 
@@ -287,7 +288,6 @@ export const DriverWebsite: React.FC = () => {
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regDl, setRegDl] = useState('');
-  const [regBadge, setRegBadge] = useState('');
   const [regAadhaar, setRegAadhaar] = useState('');
   const [regPan, setRegPan] = useState('');
   const [regVehicleType, setRegVehicleType] = useState('Tempo Traveller (17 Seater)');
@@ -345,21 +345,21 @@ export const DriverWebsite: React.FC = () => {
   ) => {
     const currentDoc = regDocs[docKey];
     return (
-      <div className="mt-2 p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="font-bold text-slate-300 text-[11px] flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5 text-blue-400" />
-            <span>{title}</span>
-            {required && <span className="text-red-400">*</span>}
+      <div className="mt-2 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <span className="font-bold text-slate-300 text-[11px] flex items-center gap-1.5 min-w-0">
+            <FileText className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span className="break-words">{title}</span>
+            {required && <span className="text-red-400 shrink-0">*</span>}
           </span>
           {currentDoc?.data ? (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black border border-emerald-500/30 flex items-center gap-1">
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black border border-emerald-500/30 flex items-center gap-1 shrink-0">
               <CheckCircle className="w-3 h-3 text-emerald-400" />
-              <span>Image Uploaded ✓</span>
+              <span>Uploaded ✓</span>
             </span>
           ) : (
-            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30">
-              {hint || 'Document Image Required'}
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30 shrink-0">
+              {hint || 'Image Required'}
             </span>
           )}
         </div>
@@ -448,8 +448,6 @@ export const DriverWebsite: React.FC = () => {
   // Driver Document Details with Dates
   const [regDlIssueDate, setRegDlIssueDate] = useState('');
   const [regDlExpiryDate, setRegDlExpiryDate] = useState('');
-  const [regBadgeIssueDate, setRegBadgeIssueDate] = useState('');
-  const [regBadgeExpiryDate, setRegBadgeExpiryDate] = useState('');
   const [regGovtIdType, setRegGovtIdType] = useState('Aadhaar');
   const [regGovtIdIssueDate, setRegGovtIdIssueDate] = useState('');
   const [regGovtIdExpiryDate, setRegGovtIdExpiryDate] = useState('');
@@ -526,7 +524,7 @@ export const DriverWebsite: React.FC = () => {
   // Driver Identity Coordinates
   const isRealDriverUser = currentUser?.role === 'DRIVER';
   const driverId = isRealDriverUser ? currentUser.id : (activeChauffeur?.id || '');
-  const driverName = isRealDriverUser ? currentUser.name : (activeChauffeur?.name || 'SJT Chauffeur');
+  const driverName = isRealDriverUser ? currentUser.name : (activeChauffeur?.name || 'SJT Driver');
   const driverPhone = isRealDriverUser ? currentUser.phone : (activeChauffeur?.phone || '');
   const vehicleReg = (isRealDriverUser ? (currentUser.assigned_vehicle || (currentUser as any)?.vehicle_reg || driverKyc?.assigned_vehicle_reg || driverKyc?.vehicle_reg) : activeChauffeur?.vehicleReg) || (driverKyc?.assigned_vehicle_reg || driverKyc?.vehicle_reg || '');
   const vehicleType = (isRealDriverUser ? (driverKyc?.vehicle_type || (currentUser as any)?.vehicle_type) : activeChauffeur?.vehicleType) || (driverKyc?.vehicle_type || 'Commercial Fleet');
@@ -796,7 +794,7 @@ export const DriverWebsite: React.FC = () => {
           isOpen: true,
           type: 'CORPORATE_SHIFT_PENDING',
           title: 'Corporate Duty Shift Pending',
-          message: 'As an onboarded Corporate Company Duty Chauffeur, you have assigned corporate shifts today. Complete your assigned company duty shifts before switching to Daily Passenger Trips.',
+          message: 'As an onboarded Corporate Company Duty Driver, you have assigned corporate shifts today. Complete your assigned company duty shifts before switching to Daily Passenger Trips.',
           actionLabel: 'Start Shift 1 Duty Now',
           onAction: () => {
             setActiveTab('SHIFTS');
@@ -833,14 +831,14 @@ export const DriverWebsite: React.FC = () => {
     }
   };
 
-  // Chauffeur Sign In Submit (Supports Mobile Number or Email + Driver's Own Password)
+  // Driver Sign In Submit (Supports Mobile Number or Email + Driver's Own Password)
   const handleDriverLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
     setLoginError('');
     try {
       const identifier = loginIdentifier.trim();
-      let loggedInUser = null;
+      let loggedInUser: any = null;
       try {
         loggedInUser = await login(identifier, loginPin, 'DRIVER');
       } catch (err: any) {
@@ -850,44 +848,58 @@ export const DriverWebsite: React.FC = () => {
           } catch {}
         }
         if (!loggedInUser) {
-          const isPreset = PRESET_CHAUFFEURS.some(c => c.email.toLowerCase() === identifier.toLowerCase() || c.phone.includes(identifier));
-          if (!isPreset) {
-            throw new Error(err.message || 'Invalid mobile number or credentials. Please check your registered phone and password.');
-          }
+          throw new Error(err?.message || 'Invalid mobile number or credentials. Please check your registered phone and password.');
         }
       }
 
+      const latestKyc = await refreshDriverKyc().catch(() => null);
+      const rawDutyMode = String(
+        loggedInUser?.duty_mode ||
+        (latestKyc as any)?.duty_mode ||
+        (latestKyc as any)?.vehicle_details?.duty_mode ||
+        ''
+      ).toUpperCase();
+
+      let chosenOnboardType: 'COMPANY_DUTY' | 'REGULAR' = 'COMPANY_DUTY';
+      if (rawDutyMode === 'REGULAR' || rawDutyMode === 'DAILY_TRIPS') {
+        chosenOnboardType = 'REGULAR';
+      } else if (rawDutyMode === 'COMPANY_DUTY') {
+        chosenOnboardType = 'COMPANY_DUTY';
+      } else {
+        try {
+          const savedList = JSON.parse(localStorage.getItem('sjt_registered_drivers') || '[]');
+          const idDigits = identifier.replace(/\D/g, '').slice(-10);
+          const regMatch = savedList.find((d: any) =>
+            (idDigits.length >= 10 && String(d.phone || '').replace(/\D/g, '').endsWith(idDigits)) ||
+            String(d.email || '').toLowerCase() === identifier.toLowerCase()
+          );
+          if (regMatch?.onboardedType === 'REGULAR') chosenOnboardType = 'REGULAR';
+        } catch {}
+      }
+
       if (loggedInUser) {
-        const customChauffeur = {
+        const customDriver = {
           id: loggedInUser.id,
           name: loggedInUser.name,
           phone: loggedInUser.phone || identifier,
           email: loggedInUser.email,
-          vehicleReg: loggedInUser.assigned_vehicle || (currentUser as any)?.assigned_vehicle || '',
-          vehicleType: (loggedInUser as any).vehicle_type || 'Commercial Fleet',
+          vehicleReg: loggedInUser.assigned_vehicle || latestKyc?.assigned_vehicle_reg || latestKyc?.vehicle_reg || '',
+          vehicleType: (loggedInUser as any).vehicle_type || latestKyc?.vehicle_type || 'Commercial Fleet',
           rating: '5.0 ★ (Fleet Partner)',
           trips: '0 trips',
-          avatar: loggedInUser.name ? loggedInUser.name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : 'SC',
-          onboardedType: authDutyChoice
+          avatar: loggedInUser.name ? loggedInUser.name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : 'SD',
+          onboardedType: chosenOnboardType
         };
-        setActiveChauffeur(customChauffeur);
-        localStorage.setItem('sjt_active_chauffeur', JSON.stringify(customChauffeur));
-      } else {
-        const matched = PRESET_CHAUFFEURS.find(c => c.email.toLowerCase() === identifier.toLowerCase() || (identifier.length >= 7 && c.phone.includes(identifier)));
-        if (matched) {
-          setActiveChauffeur(matched);
-          localStorage.setItem('sjt_active_chauffeur', JSON.stringify(matched));
-        }
+        setActiveChauffeur(customDriver);
+        localStorage.setItem('sjt_active_chauffeur', JSON.stringify(customDriver));
       }
 
-      const chosenOnboardType = authDutyChoice;
       setDriverOnboardedType(chosenOnboardType);
       setDriverMode(chosenOnboardType);
       setActiveTab(chosenOnboardType === 'COMPANY_DUTY' ? 'SHIFTS' : 'TRIPS');
       localStorage.setItem('sjt_driver_logged_in', 'true');
       localStorage.setItem('sjt_driver_mode', chosenOnboardType);
       localStorage.setItem('sjt_driver_onboarded_type', chosenOnboardType);
-      await refreshDriverKyc();
       await refreshData(true);
       setShowAuthGate(false);
     } catch (err: any) {
@@ -897,7 +909,7 @@ export const DriverWebsite: React.FC = () => {
     }
   };
 
-  // Chauffeur Partner Induction Registration Submit (Driver & Vehicle Forms)
+  // Driver Partner Induction Registration Submit (Driver & Vehicle Forms)
   const handleDriverSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegLoading(true);
@@ -907,7 +919,7 @@ export const DriverWebsite: React.FC = () => {
         throw new Error('Please fill in your Full Legal Name and WhatsApp Mobile Number.');
       }
       if (!regPassword.trim() || regPassword.trim().length < 4) {
-        throw new Error('Please create a chauffeur password or PIN of at least 4 characters.');
+        throw new Error('Please create a driver password or PIN of at least 4 characters.');
       }
       
       const cleanPhone = regPhone.trim();
@@ -922,11 +934,12 @@ export const DriverWebsite: React.FC = () => {
           email: autoEmail,
           password: regPassword.trim(),
           role: 'DRIVER',
-          assigned_vehicle: regVehicleReg.trim().toUpperCase()
+          assigned_vehicle: regVehicleReg.trim().toUpperCase(),
+          duty_mode: authDutyChoice
         });
       } catch (regErr: any) {
         if (regErr.message && (regErr.message.includes('already registered') || regErr.message.includes('409'))) {
-          throw new Error('This mobile number is already registered. Each driver can register only once with their mobile number. Please sign in with your password.');
+          throw new Error('This mobile number is already registered. Each driver can register only once with their mobile number. Please login with your password.');
         }
         console.warn('Register API warning, proceeding with resilient induction:', regErr);
       }
@@ -947,9 +960,6 @@ export const DriverWebsite: React.FC = () => {
         license_number: regDl.trim(),
         license_issue_date: regDlIssueDate,
         license_expiry_date: regDlExpiryDate,
-        badge_number: regBadge.trim(),
-        badge_issue_date: regBadgeIssueDate,
-        badge_expiry_date: regBadgeExpiryDate,
         govt_id_type: regGovtIdType,
         govt_id_number: regGovtIdType === 'Aadhaar' ? regAadhaar.trim() : regPan.trim(),
         govt_id_issue_date: regGovtIdIssueDate,
@@ -998,13 +1008,14 @@ export const DriverWebsite: React.FC = () => {
         address: regBaseArea.trim() || 'Bengaluru, Karnataka',
         documents: regDocs as any,
         face_document: regDocs.passport_photo || null,
+        duty_mode: authDutyChoice,
         kyc_status: 'PENDING',
         submitted_at: new Date().toLocaleString('en-IN')
       };
 
       const savedKyc = await submitDriverKyc(inductionPayload);
 
-      const customChauffeur = {
+      const customDriver = {
         id: registeredUser?.id || `drv_${cleanPhone.replace(/\D/g, '')}`,
         name: regName.trim(),
         phone: cleanPhone,
@@ -1013,7 +1024,7 @@ export const DriverWebsite: React.FC = () => {
         vehicleType: regVehicleType,
         rating: '5.0 ★ (Pending Admin Audit)',
         trips: '0 trips',
-        avatar: regName.trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'SC',
+        avatar: regName.trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'SD',
         onboardedType: authDutyChoice
       };
 
@@ -1021,9 +1032,9 @@ export const DriverWebsite: React.FC = () => {
       try {
         const existingList = JSON.parse(localStorage.getItem('sjt_registered_drivers') || '[]');
         const updatedList = [
-          ...existingList.filter((d: any) => d.phone !== cleanPhone && d.id !== customChauffeur.id),
+          ...existingList.filter((d: any) => d.phone !== cleanPhone && d.id !== customDriver.id),
           {
-            ...customChauffeur,
+            ...customDriver,
             vehicle_reg: regVehicleReg.trim().toUpperCase(),
             vehicle_type: regVehicleType,
             password: regPassword.trim()
@@ -1032,8 +1043,8 @@ export const DriverWebsite: React.FC = () => {
         localStorage.setItem('sjt_registered_drivers', JSON.stringify(updatedList));
       } catch {}
 
-      setActiveChauffeur(customChauffeur);
-      localStorage.setItem('sjt_active_chauffeur', JSON.stringify(customChauffeur));
+      setActiveChauffeur(customDriver);
+      localStorage.setItem('sjt_active_chauffeur', JSON.stringify(customDriver));
       localStorage.setItem('sjt_driver_logged_in', 'true');
       setDriverOnboardedType(authDutyChoice);
       localStorage.setItem('sjt_driver_onboarded_type', authDutyChoice);
@@ -1051,7 +1062,7 @@ export const DriverWebsite: React.FC = () => {
       });
       setShowAuthGate(false);
       await refreshData(true);
-      await refreshDriverKyc();
+      await refreshDriverKyc().catch(() => null);
     } catch (err: any) {
       setRegError(err.message || 'Could not complete registration.');
     } finally {
@@ -1059,27 +1070,66 @@ export const DriverWebsite: React.FC = () => {
     }
   };
 
-  // Status Lookup Submit
+  // Status Lookup Submit (Queries backend API + falls back to synced context / local records)
   const handleCheckKycStatus = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!statusLookupInput.trim()) return;
+    const query = statusLookupInput.trim();
+    if (!query) return;
     setStatusLookupLoading(true);
     setStatusLookupError('');
     setStatusLookupResult(null);
+
+    const findLocalMatch = () => {
+      const qLower = query.toLowerCase();
+      const qDigits = query.replace(/\D/g, '');
+      const localStored: any[] = [];
+      try {
+        const listRaw = localStorage.getItem('sjt_kyc_list');
+        if (listRaw) localStored.push(...JSON.parse(listRaw));
+        const singleRaw = localStorage.getItem('sjt_driver_kyc');
+        if (singleRaw) localStored.push(JSON.parse(singleRaw));
+      } catch {}
+      const candidates = [...(kycRequests || []), ...localStored].filter(Boolean);
+      return candidates.find(k => {
+        const kDigits = String(k.driver_phone || '').replace(/\D/g, '');
+        const phoneMatch = qDigits.length >= 10 && kDigits.length >= 10 && kDigits.slice(-10) === qDigits.slice(-10);
+        return (
+          String(k.driver_email || '').toLowerCase() === qLower ||
+          (qDigits && kDigits === qDigits) ||
+          phoneMatch ||
+          String(k.license_number || '').toLowerCase() === qLower ||
+          String(k.id || '').toLowerCase() === qLower
+        );
+      }) || null;
+    };
+
     try {
       const apiBase = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '' : 'http://localhost:5000');
-      const res = await fetch(`${apiBase}/api/driver/kyc-lookup?identifier=${encodeURIComponent(statusLookupInput.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'No application found for this identifier.');
-      setStatusLookupResult(data);
+      const res = await fetch(`${apiBase}/api/driver/kyc-lookup?identifier=${encodeURIComponent(query)}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data && data.kyc_status) {
+        setStatusLookupResult(data);
+        return;
+      }
+      const localHit = findLocalMatch();
+      if (localHit) {
+        setStatusLookupResult(localHit);
+        return;
+      }
+      throw new Error(data.error || 'No KYC application found for this mobile number, email, or application ID.');
     } catch (err: any) {
-      setStatusLookupError(err.message || 'Application lookup failed.');
+      const localHit = findLocalMatch();
+      if (localHit) {
+        setStatusLookupResult(localHit);
+      } else {
+        setStatusLookupError(err.message || 'No KYC application found for this identifier.');
+      }
     } finally {
       setStatusLookupLoading(false);
     }
   };
 
-  // Sign Out / Switch Chauffeur
+  // Sign Out / Switch Driver
   const handleDriverSignOut = () => {
     localStorage.removeItem('sjt_driver_logged_in');
     setShowAuthGate(true);
@@ -1336,7 +1386,7 @@ export const DriverWebsite: React.FC = () => {
     }
     const alreadyCompleted = getTodayShiftDuty(dutyShift);
     if (alreadyCompleted && (alreadyCompleted.logoutTime || alreadyCompleted.logout_time)) {
-      setDutyCheckInError(`${dutyShift} has already been completed today (${alreadyCompleted.dailyKm ?? alreadyCompleted.daily_km ?? 0} KM logged). A chauffeur can only perform each shift once per day. Please select ${nextAvailableShift}.`);
+      setDutyCheckInError(`${dutyShift} has already been completed today (${alreadyCompleted.dailyKm ?? alreadyCompleted.daily_km ?? 0} KM logged). A driver can only perform each shift once per day. Please select ${nextAvailableShift}.`);
       return;
     }
 
@@ -1464,7 +1514,7 @@ export const DriverWebsite: React.FC = () => {
         },
         { 
           id: 'KYC', 
-          label: 'Chauffeur Documents & KYC', 
+          label: 'Driver Documents & KYC', 
           icon: <ShieldCheck className="w-4 h-4" />, 
           count: '⏳ Under Review' 
         }
@@ -1486,7 +1536,7 @@ export const DriverWebsite: React.FC = () => {
         },
         { 
           id: 'KYC', 
-          label: 'Chauffeur Documents & KYC', 
+          label: 'Driver Documents & KYC', 
           icon: <ShieldCheck className="w-4 h-4" />, 
           count: 'Verified' 
         }
@@ -1516,7 +1566,7 @@ export const DriverWebsite: React.FC = () => {
         },
         { 
           id: 'KYC', 
-          label: 'Chauffeur Documents & KYC', 
+          label: 'Driver Documents & KYC', 
           icon: <ShieldCheck className="w-4 h-4" />, 
           count: 'Verified' 
         }
@@ -1529,138 +1579,77 @@ export const DriverWebsite: React.FC = () => {
   // =========================================================================
   if (showAuthGate) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#020B1F] via-[#071B49] to-[#0A122C] text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden font-sans">
+      <div className="min-h-screen bg-gradient-to-br from-[#020B1F] via-[#071B49] to-[#0A122C] text-slate-100 flex flex-col justify-center items-center p-3 sm:p-6 relative overflow-x-hidden font-sans">
         {/* Animated Background Ambient Glows */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-600/15 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* Central Authentication Modal Container */}
-        <div className="w-full max-w-xl bg-slate-900/90 backdrop-blur-xl border border-blue-500/30 rounded-3xl shadow-2xl p-6 sm:p-8 relative z-10 animate-fade-in my-6">
+        <div className={`w-full ${authMode === 'SIGNUP' ? 'max-w-2xl' : 'max-w-xl'} bg-slate-900/90 backdrop-blur-xl border border-blue-500/30 rounded-3xl shadow-2xl p-4 sm:p-8 relative z-10 animate-fade-in my-4 sm:my-6`}>
           {/* Header & 3D Logo */}
-          <div className="text-center space-y-2 mb-6">
+          <div className="text-center space-y-2 mb-5 sm:mb-6">
             <div className="inline-flex p-3 rounded-2xl bg-white/5 border border-white/10 shadow-inner mb-1">
               <img src="/sjt_logo.png" alt="SJT Logo" className="h-12 w-auto object-contain mx-auto" />
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight flex items-center justify-center gap-2">
-              <span>SJT CHAUFFEUR PORTAL</span>
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex flex-wrap items-center justify-center gap-2">
+              <span>SJT DRIVER PORTAL</span>
               <span className="bg-[#ED1735] text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
                 Fleet Web
               </span>
             </h1>
             <p className="text-xs text-blue-200">
-              Sharanajyoti Tours & Travels Pvt. Ltd. • Official Chauffeur Dispatch & Shift Console
+              Sharanajyoti Tours & Travels Pvt. Ltd. • Official Driver Dispatch & Shift Console
             </p>
           </div>
 
-          {/* Mode Switcher Pills: Sign In vs Register KYC vs Track Status */}
-          <div className="grid grid-cols-3 gap-1 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 mb-5 text-[11px]">
+          {/* Mode Switcher Pills: Driver Login vs Partner Induction vs Track KYC Status */}
+          <div className="grid grid-cols-3 gap-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 mb-5 text-[11px] sm:text-xs">
             <button
               type="button"
               onClick={() => { setAuthMode('LOGIN'); setLoginError(''); }}
-              className={`py-2 rounded-xl font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`py-2.5 px-2 rounded-xl font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center leading-tight ${
                 authMode === 'LOGIN'
                   ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <User className="w-3.5 h-3.5" />
-              <span>Chauffeur Sign In</span>
+              <User className="w-3.5 h-3.5 shrink-0" />
+              <span>Driver Login</span>
             </button>
             <button
               type="button"
               onClick={() => { setAuthMode('SIGNUP'); setRegError(''); }}
-              className={`py-2 rounded-xl font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`py-2.5 px-2 rounded-xl font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center leading-tight ${
                 authMode === 'SIGNUP'
                   ? 'bg-gradient-to-r from-[#ED1735] to-rose-600 text-white shadow-lg'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <Award className="w-3.5 h-3.5" />
-              <span>Partner Induction (Driver & Car KYC)</span>
+              <Award className="w-3.5 h-3.5 shrink-0" />
+              <span>Partner Induction</span>
             </button>
             <button
               type="button"
               onClick={() => { setAuthMode('STATUS'); setStatusLookupError(''); }}
-              className={`py-2 rounded-xl font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`py-2.5 px-2 rounded-xl font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center leading-tight ${
                 authMode === 'STATUS'
                   ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <FileCheck className="w-3.5 h-3.5" />
+              <FileCheck className="w-3.5 h-3.5 shrink-0" />
               <span>Track KYC Status</span>
             </button>
           </div>
 
-          {/* DUAL WORKING MODE SELECTOR: COMPANY DUTY VS DAILY TRIPS */}
-          <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-blue-500/30 mb-5 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-300">
-              <span className="flex items-center gap-1.5 text-amber-300">
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Select Working Duty Profile for Today:</span>
-              </span>
-              <span className="text-[10px] text-slate-400 lowercase">can switch later</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setAuthDutyChoice('COMPANY_DUTY')}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  authDutyChoice === 'COMPANY_DUTY'
-                    ? 'bg-blue-900/60 border-blue-400 text-white shadow-lg ring-2 ring-blue-500/40'
-                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs font-black">
-                  <span className="flex items-center gap-1.5 text-blue-300">
-                    <Building2 className="w-4 h-4 text-blue-400" />
-                    <span>Company Duty</span>
-                  </span>
-                  {authDutyChoice === 'COMPANY_DUTY' && <Check className="w-4 h-4 text-blue-400" />}
-                </div>
-                <p className="text-[11px] text-slate-300 mt-1 leading-snug">
-                  Corporate staff shifts, daily route & KM odometer logging (Shift 1 to 10+)
-                </p>
-                <span className="text-[10px] text-blue-400 font-mono mt-1 block font-bold">
-                  ● Shows Shift Tracker only
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAuthDutyChoice('REGULAR')}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  authDutyChoice === 'REGULAR'
-                    ? 'bg-emerald-950/80 border-emerald-400 text-white shadow-lg ring-2 ring-emerald-500/40'
-                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs font-black">
-                  <span className="flex items-center gap-1.5 text-emerald-300">
-                    <Car className="w-4 h-4 text-emerald-400" />
-                    <span>Daily Trips</span>
-                  </span>
-                  {authDutyChoice === 'REGULAR' && <Check className="w-4 h-4 text-emerald-400" />}
-                </div>
-                <p className="text-[11px] text-slate-300 mt-1 leading-snug">
-                  On-demand passenger rides, airport runs, outstation bookings & dispatch
-                </p>
-                <span className="text-[10px] text-emerald-400 font-mono mt-1 block font-bold">
-                  ● Shows Passenger Dispatch only
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* TAB A: CHAUFFEUR SIGN IN */}
+          {/* TAB A: DRIVER LOGIN */}
           {authMode === 'LOGIN' && (
             <div className="space-y-5 animate-fade-in">
-              {/* Chauffeur Credentials Login Form */}
+              {/* Driver Credentials Login Form */}
               <form onSubmit={handleDriverLogin} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Chauffeur Mobile Number or Email
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Driver Mobile Number or Email
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1670,14 +1659,14 @@ export const DriverWebsite: React.FC = () => {
                       value={loginIdentifier}
                       onChange={e => setLoginIdentifier(e.target.value)}
                       placeholder="Enter registered mobile number or email"
-                      className="w-full pl-9 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full pl-9 pr-3 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Chauffeur Security PIN / Password
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Driver Security PIN / Password
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1686,13 +1675,13 @@ export const DriverWebsite: React.FC = () => {
                       required
                       value={loginPin}
                       onChange={e => setLoginPin(e.target.value)}
-                      placeholder="Enter chauffeur password / PIN"
-                      className="w-full pl-9 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-mono"
+                      placeholder="Enter driver password / PIN"
+                      className="w-full pl-9 pr-10 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPin(!showPin)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
                     >
                       {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -1709,29 +1698,21 @@ export const DriverWebsite: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className={`w-full py-3.5 px-4 rounded-2xl text-white font-black text-sm shadow-xl active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    authDutyChoice === 'COMPANY_DUTY'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-900/40'
-                      : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-900/40'
-                  }`}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl shadow-blue-900/40 text-white font-black text-sm active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2"
                 >
                   <KeyRound className="w-4 h-4" />
-                  <span>
-                    {loginLoading 
-                      ? 'Authenticating Chauffeur…' 
-                      : `Sign In to ${authDutyChoice === 'COMPANY_DUTY' ? 'Company Duty' : 'Daily Trips'} Cockpit`}
-                  </span>
+                  <span>{loginLoading ? 'Logging in…' : 'Login'}</span>
                 </button>
               </form>
             </div>
           )}
 
-          {/* TAB B: DRIVER PARTNER 12-DOCUMENT KYC ONBOARDING */}
+          {/* TAB B: DRIVER PARTNER KYC ONBOARDING */}
           {authMode === 'SIGNUP' && (
             <div className="space-y-4 animate-fade-in">
               {submittedKycResult ? (
                 /* Application Submitted Success State */
-                <div className="p-6 bg-slate-950/90 rounded-3xl border border-emerald-500/40 text-center space-y-4">
+                <div className="p-5 sm:p-6 bg-slate-950/90 rounded-3xl border border-emerald-500/40 text-center space-y-4">
                   <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border border-emerald-500/30">
                     <CheckCircle className="w-8 h-8" />
                   </div>
@@ -1749,31 +1730,31 @@ export const DriverWebsite: React.FC = () => {
 
                   {/* Summary Box */}
                   <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 text-left text-xs space-y-2 font-mono">
-                    <div className="flex justify-between border-b border-slate-800 pb-1.5 font-sans">
+                    <div className="flex justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans">
                       <span className="text-slate-400">Application Reference ID:</span>
-                      <strong className="text-amber-400 font-mono font-black">{submittedKycResult.application_id}</strong>
+                      <strong className="text-amber-400 font-mono font-black break-all text-right">{submittedKycResult.application_id}</strong>
                     </div>
-                    <div className="flex justify-between border-b border-slate-800 pb-1.5 font-sans">
-                      <span className="text-slate-400">Chauffeur Partner:</span>
-                      <strong className="text-white">{submittedKycResult.driver_name}</strong>
+                    <div className="flex justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans">
+                      <span className="text-slate-400">Driver Partner:</span>
+                      <strong className="text-white text-right">{submittedKycResult.driver_name}</strong>
                     </div>
-                    <div className="flex justify-between border-b border-slate-800 pb-1.5 font-sans">
+                    <div className="flex justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans">
                       <span className="text-slate-400">Vehicle Registration:</span>
-                      <strong className="text-amber-300">{submittedKycResult.vehicle_reg}</strong>
+                      <strong className="text-amber-300 text-right">{submittedKycResult.vehicle_reg}</strong>
                     </div>
-                    <div className="flex justify-between border-b border-slate-800 pb-1.5 font-sans">
+                    <div className="flex justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans">
                       <span className="text-slate-400">Fleet Category:</span>
-                      <strong className="text-blue-300">{submittedKycResult.vehicle_type}</strong>
+                      <strong className="text-blue-300 text-right">{submittedKycResult.vehicle_type}</strong>
                     </div>
-                    <div className="flex justify-between border-b border-slate-800 pb-1.5 font-sans">
+                    <div className="flex justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans">
                       <span className="text-slate-400">Corporate Duty Serving:</span>
-                      <strong className="text-purple-300">{submittedKycResult.companies || 'JCPenney / SJT Corporate'}</strong>
+                      <strong className="text-purple-300 text-right">{submittedKycResult.companies || 'SJT Fleet'}</strong>
                     </div>
-                    <div className="flex justify-between border-b border-slate-800 pb-1.5 font-sans">
+                    <div className="flex justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans">
                       <span className="text-slate-400">Safety & Vehicle Inspection:</span>
-                      <span className="text-emerald-400 font-bold">✓ 9 Accessories & 9 Condition Checks Passed</span>
+                      <span className="text-emerald-400 font-bold text-right">✓ 9 Accessories & 9 Condition Checks Passed</span>
                     </div>
-                    <div className="flex justify-between border-b border-slate-800 pb-1.5 font-sans">
+                    <div className="flex justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans">
                       <span className="text-slate-400">Audit Status:</span>
                       <span className="text-amber-400 font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/40">
                         ⏳ PENDING CENTRAL OPERATIONS AUDIT
@@ -1812,25 +1793,80 @@ export const DriverWebsite: React.FC = () => {
                       }}
                       className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-black text-xs transition cursor-pointer"
                     >
-                      Back to Driver Sign In
+                      Back to Driver Login
                     </button>
                   </div>
                 </div>
               ) : (
                 /* Complete Driver & Vehicle Induction Form */
                 <form onSubmit={handleDriverSignup} className="space-y-4">
+                  {/* DUTY PROFILE SELECTOR — SHOWN ONLY DURING PARTNER INDUCTION */}
+                  <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-blue-500/30 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] font-black uppercase tracking-wider text-slate-300">
+                      <span className="flex items-center gap-1.5 text-amber-300">
+                        <Sliders className="w-3.5 h-3.5 shrink-0" />
+                        <span>Select Working Duty Profile:</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 lowercase">during onboarding</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setAuthDutyChoice('COMPANY_DUTY')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          authDutyChoice === 'COMPANY_DUTY'
+                            ? 'bg-blue-900/60 border-blue-400 text-white shadow-lg ring-2 ring-blue-500/40'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs font-black">
+                          <span className="flex items-center gap-1.5 text-blue-300">
+                            <Building2 className="w-4 h-4 text-blue-400 shrink-0" />
+                            <span>Company Duty</span>
+                          </span>
+                          {authDutyChoice === 'COMPANY_DUTY' && <Check className="w-4 h-4 text-blue-400 shrink-0" />}
+                        </div>
+                        <p className="text-[11px] text-slate-300 mt-1.5 leading-snug">
+                          Corporate staff shifts, daily route & KM odometer logging (Shift 1 to 10+)
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setAuthDutyChoice('REGULAR')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          authDutyChoice === 'REGULAR'
+                            ? 'bg-emerald-950/80 border-emerald-400 text-white shadow-lg ring-2 ring-emerald-500/40'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs font-black">
+                          <span className="flex items-center gap-1.5 text-emerald-300">
+                            <Car className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>Daily Trips</span>
+                          </span>
+                          {authDutyChoice === 'REGULAR' && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                        </div>
+                        <p className="text-[11px] text-emerald-200/90 mt-1.5 leading-relaxed font-semibold">
+                          Local Trips • Outstation • Airport • Tourists • Packages • RAC
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Official Induction Dossier Header */}
-                  <div className="p-3 bg-slate-950/90 rounded-2xl border border-blue-500/30 flex items-center justify-between gap-2.5">
-                    <div>
+                  <div className="p-3 bg-slate-950/90 rounded-2xl border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="min-w-0">
                       <div className="text-xs font-black text-white flex items-center gap-1.5">
-                        <Award className="w-4 h-4 text-[#ED1735]" />
+                        <Award className="w-4 h-4 text-[#ED1735] shrink-0" />
                         <span>Driver & Vehicle Induction Dossier (JCPenney / SJT Standards)</span>
                       </div>
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-[10px] text-slate-400 mt-0.5">
                         Driver Details + Vehicle Details + Document Validity Dates + 18-Point Physical Safety Checklist
                       </p>
                     </div>
-                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2.5 py-1 rounded-lg shrink-0">
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2.5 py-1 rounded-lg shrink-0 self-start sm:self-center">
                       Official KYC Dossier
                     </span>
                   </div>
@@ -1838,10 +1874,10 @@ export const DriverWebsite: React.FC = () => {
                   {/* ======================================================== */}
                   {/* FORM 1: DRIVER INDUCTION FORM (JCPenney / SJT) */}
                   {/* ======================================================== */}
-                  <div className="p-4 bg-slate-950/80 rounded-2xl border border-blue-500/30 space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="p-3.5 sm:p-4 bg-slate-950/80 rounded-2xl border border-blue-500/30 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800 pb-2">
                       <div className="text-xs font-black text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <User className="w-4 h-4 text-blue-400" />
+                        <User className="w-4 h-4 text-blue-400 shrink-0" />
                         <span>FORM 1: DRIVER INDUCTION FORM (JCPenney / SJT)</span>
                       </div>
                       <span className="text-[10px] text-slate-400 font-bold">Personal Details & Statutory Docs</span>
@@ -1863,7 +1899,7 @@ export const DriverWebsite: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                          Chauffeur Name (Full Legal Name) <span className="text-red-400">*</span>
+                          Driver Name (Full Legal Name) <span className="text-red-400">*</span>
                         </label>
                         <input
                           type="text"
@@ -1954,7 +1990,7 @@ export const DriverWebsite: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                          Create Chauffeur Password / Security PIN <span className="text-red-400">*</span>
+                          Create Driver Password / Security PIN <span className="text-red-400">*</span>
                         </label>
                         <div className="relative">
                           <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1990,103 +2026,66 @@ export const DriverWebsite: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Driver Document Details Table (DL, Badge, Govt ID, Police, Medical, BGV) */}
-                    <div className="pt-2 border-t border-slate-800/80 space-y-2">
-                      <div className="text-[11px] font-black text-blue-300 uppercase tracking-wider flex items-center justify-between">
-                        <span>Chauffeur Document Details (Issued Date & Expiry Date):</span>
+                    {/* Driver Document Details Table (DL, Govt ID, Police, Medical, BGV — PSV Badge Removed) */}
+                    <div className="pt-2 border-t border-slate-800/80 space-y-2.5">
+                      <div className="text-[11px] font-black text-blue-300 uppercase tracking-wider flex flex-wrap items-center justify-between gap-1">
+                        <span>Driver Document Details (Issued Date & Expiry Date):</span>
                         <span className="text-[10px] text-slate-400 font-normal">Physical Document Verification</span>
                       </div>
 
-                      <div className="space-y-2">
-                        {/* 0. Chauffeur Passport Photo */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1 text-xs">
-                          {renderDocUploadField('passport_photo', 'Chauffeur Passport Size Photo / Uniform Selfie', 'chauffeur_photo.jpg', 'Upload clear face photo in uniform', true)}
+                      <div className="space-y-2.5">
+                        {/* 0. Driver Passport Photo */}
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1 text-xs">
+                          {renderDocUploadField('passport_photo', 'Driver Passport Size Photo / Uniform Selfie', 'driver_photo.jpg', 'Upload clear face photo in uniform', true)}
                         </div>
 
                         {/* 1. Driving Licence */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5 text-xs">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2 text-xs">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <span className="font-bold text-slate-200">1. Driving Licence (DL)</span>
                             <input
                               type="text"
                               value={regDl}
                               onChange={e => setRegDl(e.target.value)}
                               placeholder="DL # (e.g. KA-04-2018-0091823)"
-                              className="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-amber-300"
+                              className="w-full sm:w-56 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-amber-300"
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-[10px]">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                             <div>
-                              <span className="text-slate-400 block">Issued Date:</span>
+                              <span className="text-slate-400 block mb-0.5">Issued Date:</span>
                               <input
                                 type="date"
                                 value={regDlIssueDate}
                                 onChange={e => setRegDlIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Expiry Date:</span>
+                              <span className="text-slate-400 block mb-0.5">Expiry Date:</span>
                               <input
                                 type="date"
                                 value={regDlExpiryDate}
                                 onChange={e => setRegDlExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-800">
-                            {renderDocUploadField('dl', 'Driving Licence (Front Image)', 'dl_front.jpg', 'Upload DL front image', true)}
-                            {renderDocUploadField('dl_back', 'Driving Licence (Back Image)', 'dl_back.jpg', 'Upload DL back image')}
+                            {renderDocUploadField('dl', 'Driving Licence (Front Image)', 'dl_front.jpg', 'Upload DL front', true)}
+                            {renderDocUploadField('dl_back', 'Driving Licence (Back Image)', 'dl_back.jpg', 'Upload DL back')}
                           </div>
                         </div>
 
-                        {/* 2. Badge Number */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5 text-xs">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                            <span className="font-bold text-slate-200">2. PSV Badge Number</span>
-                            <input
-                              type="text"
-                              value={regBadge}
-                              onChange={e => setRegBadge(e.target.value)}
-                              placeholder="Badge # (e.g. PSV-BLR-88392)"
-                              className="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-amber-300"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-[10px]">
-                            <div>
-                              <span className="text-slate-400 block">Badge Issued Date:</span>
-                              <input
-                                type="date"
-                                value={regBadgeIssueDate}
-                                onChange={e => setRegBadgeIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <span className="text-slate-400 block">Badge Expiry Date:</span>
-                              <input
-                                type="date"
-                                value={regBadgeExpiryDate}
-                                onChange={e => setRegBadgeExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
-                              />
-                            </div>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-slate-800">
-                            {renderDocUploadField('badge', 'Commercial PSV Badge Certificate/Card', 'psv_badge.jpg', 'Upload badge card/certificate', true)}
-                          </div>
-                        </div>
-
-                        {/* 3. Government ID Proof */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5 text-xs">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-200">3. Government ID:</span>
+                        {/* 2. Government ID Proof */}
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2 text-xs">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2 min-w-0">
+                              <span className="font-bold text-slate-200 shrink-0">2. Government ID:</span>
                               <select
                                 value={regGovtIdType}
                                 onChange={e => setRegGovtIdType(e.target.value)}
-                                className="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-[11px] text-white"
+                                className="w-full sm:w-auto px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-[11px] text-white min-w-0"
                               >
                                 <option value="Aadhaar">Aadhaar Card (UIDAI)</option>
                                 <option value="PAN">PAN Card (Income Tax)</option>
@@ -2102,26 +2101,26 @@ export const DriverWebsite: React.FC = () => {
                                 else setRegAadhaar(e.target.value);
                               }}
                               placeholder="ID Card Number"
-                              className="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-white"
+                              className="w-full sm:w-52 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-white"
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-[10px]">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                             <div>
-                              <span className="text-slate-400 block">Issued Date:</span>
+                              <span className="text-slate-400 block mb-0.5">Issued Date:</span>
                               <input
                                 type="date"
                                 value={regGovtIdIssueDate}
                                 onChange={e => setRegGovtIdIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Expiry Date:</span>
+                              <span className="text-slate-400 block mb-0.5">Expiry Date:</span>
                               <input
                                 type="date"
                                 value={regGovtIdExpiryDate}
                                 onChange={e => setRegGovtIdExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                           </div>
@@ -2130,62 +2129,61 @@ export const DriverWebsite: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* 4. Police Verification & Medical Certificate */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                          <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                            <span className="font-bold text-slate-200 text-[11px] block">4. Police Verification Certificate</span>
-                            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                              <div>
-                                <span className="text-slate-400 block">Issued:</span>
-                                <input
-                                  type="date"
-                                  value={regPoliceIssueDate}
-                                  onChange={e => setRegPoliceIssueDate(e.target.value)}
-                                  className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block">Expiry:</span>
-                                <input
-                                  type="date"
-                                  value={regPoliceExpiryDate}
-                                  onChange={e => setRegPoliceExpiryDate(e.target.value)}
-                                  className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
-                                />
-                              </div>
+                        {/* 3. Police Verification Certificate */}
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2 text-xs">
+                          <span className="font-bold text-slate-200 text-xs block">3. Police Verification Certificate</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                            <div>
+                              <span className="text-slate-400 block mb-0.5">Issued Date:</span>
+                              <input
+                                type="date"
+                                value={regPoliceIssueDate}
+                                onChange={e => setRegPoliceIssueDate(e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
+                              />
                             </div>
-                            {renderDocUploadField('police_certificate', 'Police Verification Certificate', 'police_clearance.jpg', 'Upload police clearance image', true)}
-                          </div>
-
-                          <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                            <span className="font-bold text-slate-200 text-[11px] block">5. Medical Fitness Certificate</span>
-                            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                              <div>
-                                <span className="text-slate-400 block">Issued:</span>
-                                <input
-                                  type="date"
-                                  value={regMedicalIssueDate}
-                                  onChange={e => setRegMedicalIssueDate(e.target.value)}
-                                  className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block">Expiry:</span>
-                                <input
-                                  type="date"
-                                  value={regMedicalExpiryDate}
-                                  onChange={e => setRegMedicalExpiryDate(e.target.value)}
-                                  className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
-                                />
-                              </div>
+                            <div>
+                              <span className="text-slate-400 block mb-0.5">Expiry Date:</span>
+                              <input
+                                type="date"
+                                value={regPoliceExpiryDate}
+                                onChange={e => setRegPoliceExpiryDate(e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
+                              />
                             </div>
-                            {renderDocUploadField('medical_certificate', 'Medical Fitness Certificate (Form 1-A)', 'medical_cert.jpg', 'Upload Form 1-A certificate', true)}
                           </div>
+                          {renderDocUploadField('police_certificate', 'Police Verification Certificate', 'police_clearance.jpg', 'Upload police clearance', true)}
                         </div>
 
-                        {/* 6. Background Verification Agency */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1 text-xs">
-                          <span className="font-bold text-slate-200 text-[11px] block">6. Background Verification (BGV) Agency Name</span>
+                        {/* 4. Medical Fitness Certificate */}
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2 text-xs">
+                          <span className="font-bold text-slate-200 text-xs block">4. Medical Fitness Certificate (Form 1-A)</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                            <div>
+                              <span className="text-slate-400 block mb-0.5">Issued Date:</span>
+                              <input
+                                type="date"
+                                value={regMedicalIssueDate}
+                                onChange={e => setRegMedicalIssueDate(e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block mb-0.5">Expiry Date:</span>
+                              <input
+                                type="date"
+                                value={regMedicalExpiryDate}
+                                onChange={e => setRegMedicalExpiryDate(e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
+                              />
+                            </div>
+                          </div>
+                          {renderDocUploadField('medical_certificate', 'Medical Fitness Certificate (Form 1-A)', 'medical_cert.jpg', 'Upload Form 1-A', true)}
+                        </div>
+
+                        {/* 5. Background Verification Agency */}
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5 text-xs">
+                          <span className="font-bold text-slate-200 text-xs block">5. Background Verification (BGV) Agency Name</span>
                           <input
                             type="text"
                             value={regBgvAgency}
@@ -2198,23 +2196,23 @@ export const DriverWebsite: React.FC = () => {
 
                       {/* Biometric Fingerprint & Signature acknowledgment */}
                       <div className="p-3 bg-blue-950/40 border border-blue-500/30 rounded-xl space-y-2 text-xs">
-                        <label className="flex items-center gap-2 text-slate-200 cursor-pointer text-[11px]">
+                        <label className="flex items-start sm:items-center gap-2 text-slate-200 cursor-pointer text-[11px]">
                           <input
                             type="checkbox"
                             checked={regFingerprintAck}
                             onChange={e => setRegFingerprintAck(e.target.checked)}
-                            className="w-4 h-4 text-emerald-500 rounded"
+                            className="w-4 h-4 text-emerald-500 rounded shrink-0 mt-0.5 sm:mt-0"
                           />
                           <span>✓ Biometric Hand Finger Prints (Right / Left) biometric consent verified & recorded</span>
                         </label>
-                        <label className="flex items-center gap-2 text-slate-200 cursor-pointer text-[11px]">
+                        <label className="flex items-start sm:items-center gap-2 text-slate-200 cursor-pointer text-[11px]">
                           <input
                             type="checkbox"
                             checked={regSignatureAck}
                             onChange={e => setRegSignatureAck(e.target.checked)}
-                            className="w-4 h-4 text-emerald-500 rounded"
+                            className="w-4 h-4 text-emerald-500 rounded shrink-0 mt-0.5 sm:mt-0"
                           />
-                          <span>✓ Chauffeur Signature & legal undertaking accepted for corporate duties</span>
+                          <span>✓ Driver Signature & legal undertaking accepted for corporate duties</span>
                         </label>
                       </div>
                     </div>
@@ -2353,131 +2351,131 @@ export const DriverWebsite: React.FC = () => {
                         Vehicle Statutory Documents (Issued & Expiry Dates):
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="grid grid-cols-1 gap-2.5 text-xs">
                         {/* RC */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                          <span className="font-bold text-slate-200 text-[11px] block">1. Registration Copy (RC Details)</span>
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                          <span className="font-bold text-slate-200 text-xs block">1. Registration Copy (RC Details)</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                             <div>
-                              <span className="text-slate-400 block">Issued:</span>
+                              <span className="text-slate-400 block mb-0.5">Issued:</span>
                               <input
                                 type="date"
                                 value={regRcIssueDate}
                                 onChange={e => setRegRcIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Expiry:</span>
+                              <span className="text-slate-400 block mb-0.5">Expiry:</span>
                               <input
                                 type="date"
                                 value={regRcExpiryDate}
                                 onChange={e => setRegRcExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                           </div>
-                          {renderDocUploadField('rc', 'Registration Copy (RC Book)', 'rc_book.jpg', 'Upload RC document', true)}
+                          {renderDocUploadField('rc', 'Registration Copy (RC Book)', 'rc_book.jpg', 'Upload RC', true)}
                         </div>
 
                         {/* Insurance */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                          <span className="font-bold text-slate-200 text-[11px] block">2. Commercial Vehicle Insurance</span>
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                          <span className="font-bold text-slate-200 text-xs block">2. Commercial Vehicle Insurance</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                             <div>
-                              <span className="text-slate-400 block">Issued:</span>
+                              <span className="text-slate-400 block mb-0.5">Issued:</span>
                               <input
                                 type="date"
                                 value={regInsuranceIssueDate}
                                 onChange={e => setRegInsuranceIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Expiry:</span>
+                              <span className="text-slate-400 block mb-0.5">Expiry:</span>
                               <input
                                 type="date"
                                 value={regInsuranceExpiryDate}
                                 onChange={e => setRegInsuranceExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                           </div>
-                          {renderDocUploadField('insurance', 'Commercial Vehicle Insurance', 'insurance.jpg', 'Upload policy document', true)}
+                          {renderDocUploadField('insurance', 'Commercial Vehicle Insurance', 'insurance.jpg', 'Upload policy', true)}
                         </div>
 
                         {/* FC */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                          <span className="font-bold text-slate-200 text-[11px] block">3. Fitness Certificate (FC)</span>
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                          <span className="font-bold text-slate-200 text-xs block">3. Fitness Certificate (FC)</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                             <div>
-                              <span className="text-slate-400 block">Issued:</span>
+                              <span className="text-slate-400 block mb-0.5">Issued:</span>
                               <input
                                 type="date"
                                 value={regFcIssueDate}
                                 onChange={e => setRegFcIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Expiry:</span>
+                              <span className="text-slate-400 block mb-0.5">Expiry:</span>
                               <input
                                 type="date"
                                 value={regFcExpiryDate}
                                 onChange={e => setRegFcExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                           </div>
-                          {renderDocUploadField('fitness', 'Fitness Certificate (FC - Form 38)', 'fc_certificate.jpg', 'Upload FC document', true)}
+                          {renderDocUploadField('fitness', 'Fitness Certificate (FC - Form 38)', 'fc_certificate.jpg', 'Upload FC', true)}
                         </div>
 
                         {/* Permit */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                          <span className="font-bold text-slate-200 text-[11px] block">4. Commercial Permit (Tourist/State)</span>
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                          <span className="font-bold text-slate-200 text-xs block">4. Commercial Permit (Tourist/State)</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                             <div>
-                              <span className="text-slate-400 block">Issued:</span>
+                              <span className="text-slate-400 block mb-0.5">Issued:</span>
                               <input
                                 type="date"
                                 value={regPermitIssueDate}
                                 onChange={e => setRegPermitIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Expiry:</span>
+                              <span className="text-slate-400 block mb-0.5">Expiry:</span>
                               <input
                                 type="date"
                                 value={regPermitExpiryDate}
                                 onChange={e => setRegPermitExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                           </div>
-                          {renderDocUploadField('permit', 'Commercial Permit (Form 46)', 'commercial_permit.jpg', 'Upload permit document', true)}
+                          {renderDocUploadField('permit', 'Commercial Permit (Form 46)', 'commercial_permit.jpg', 'Upload permit', true)}
                         </div>
 
                         {/* Road Tax */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                          <span className="font-bold text-slate-200 text-[11px] block">5. Karnataka Road Tax</span>
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                          <span className="font-bold text-slate-200 text-xs block">5. Karnataka Road Tax</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                             <div>
-                              <span className="text-slate-400 block">Issued:</span>
+                              <span className="text-slate-400 block mb-0.5">Issued:</span>
                               <input
                                 type="date"
                                 value={regTaxIssueDate}
                                 onChange={e => setRegTaxIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Expiry:</span>
+                              <span className="text-slate-400 block mb-0.5">Expiry:</span>
                               <input
                                 type="date"
                                 value={regTaxExpiryDate}
                                 onChange={e => setRegTaxExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                           </div>
@@ -2485,35 +2483,35 @@ export const DriverWebsite: React.FC = () => {
                         </div>
 
                         {/* Emission Test */}
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                          <span className="font-bold text-slate-200 text-[11px] block">6. Emission Test (PUC)</span>
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                          <span className="font-bold text-slate-200 text-xs block">6. Emission Test (PUC)</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                             <div>
-                              <span className="text-slate-400 block">Issued:</span>
+                              <span className="text-slate-400 block mb-0.5">Issued:</span>
                               <input
                                 type="date"
                                 value={regEmissionIssueDate}
                                 onChange={e => setRegEmissionIssueDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Expiry:</span>
+                              <span className="text-slate-400 block mb-0.5">Expiry:</span>
                               <input
                                 type="date"
                                 value={regEmissionExpiryDate}
                                 onChange={e => setRegEmissionExpiryDate(e.target.value)}
-                                className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs"
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs"
                               />
                             </div>
                           </div>
-                          {renderDocUploadField('emissions', 'Pollution Test Certificate (PUC)', 'emission_puc.jpg', 'Upload PUC certificate', true)}
+                          {renderDocUploadField('emissions', 'Pollution Test Certificate (PUC)', 'emission_puc.jpg', 'Upload PUC', true)}
                         </div>
 
                         {/* Vehicle Photo */}
-                        <div className="sm:col-span-2 p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-                          <span className="font-bold text-slate-200 text-[11px] block">7. Vehicle Exterior & Yellow Plate Photo</span>
-                          {renderDocUploadField('vehicle_photo', 'Yellow-Board Vehicle Front & Plate Photo', 'vehicle_plate.jpg', 'Upload exterior photo with yellow number plate', true)}
+                        <div className="p-2.5 sm:p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                          <span className="font-bold text-slate-200 text-xs block">7. Vehicle Exterior & Yellow Plate Photo</span>
+                          {renderDocUploadField('vehicle_photo', 'Yellow-Board Vehicle Front & Plate Photo', 'vehicle_plate.jpg', 'Upload exterior photo', true)}
                         </div>
                       </div>
                     </div>
@@ -2539,7 +2537,7 @@ export const DriverWebsite: React.FC = () => {
                           ['first_aid_kit', 'FIRST AID KIT (Sterilized Medical Box)'],
                           ['co_sticker', 'CO. STICKER (SJT / Corporate Logo)'],
                           ['torch', 'TORCH (Emergency Flashlight)'],
-                          ['umbrella', 'UMBRELLA (Chauffeur Umbrella)'],
+                          ['umbrella', 'UMBRELLA (Driver Umbrella)'],
                           ['music_system', 'MUSIC SYSTEM (Working Audio)'],
                           ['mobile_handsfree', 'MOBILE HANDSFREE HEAR PHONE / Mount'],
                           ['fixed_gps', 'FIXED GPS (Vehicle Location Tracker)'],
@@ -2758,27 +2756,27 @@ export const DriverWebsite: React.FC = () => {
               <form onSubmit={handleCheckKycStatus} className="p-4 bg-slate-950/90 rounded-2xl border border-emerald-500/30 space-y-3">
                 <div className="space-y-1">
                   <div className="text-xs font-black text-white flex items-center gap-1.5">
-                    <FileCheck className="w-4 h-4 text-emerald-400" />
+                    <FileCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>Track Driver KYC Application Status</span>
                   </div>
                   <p className="text-[10px] text-slate-400">
-                    Enter your Registered Mobile Number, Email, or Application ID
+                    Enter your Registered Mobile Number, Email, or Application ID to view live KYC updates
                   </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     required
                     value={statusLookupInput}
                     onChange={e => setStatusLookupInput(e.target.value)}
-                    placeholder="e.g. +91 98450 12345 or driver@..."
-                    className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+                    placeholder="Enter mobile number, email, or Application ID"
+                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-emerald-500"
                   />
                   <button
                     type="submit"
                     disabled={statusLookupLoading}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow cursor-pointer transition shrink-0"
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow cursor-pointer transition shrink-0"
                   >
                     {statusLookupLoading ? 'Checking…' : 'Check Status'}
                   </button>
@@ -2794,12 +2792,14 @@ export const DriverWebsite: React.FC = () => {
 
               {statusLookupResult && (
                 <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 space-y-3 text-xs">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <div>
-                      <div className="font-black text-white text-sm">{statusLookupResult.driver_name}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{statusLookupResult.driver_phone}</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                    <div className="min-w-0">
+                      <div className="font-black text-white text-sm truncate">{statusLookupResult.driver_name}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        {statusLookupResult.driver_phone} {statusLookupResult.id ? `• Ref: #${String(statusLookupResult.id).slice(0, 12)}` : ''}
+                      </div>
                     </div>
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full shrink-0 ${
                       statusLookupResult.kyc_status === 'APPROVED' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
                       statusLookupResult.kyc_status === 'REJECTED' ? 'bg-red-950 text-red-400 border border-red-800' :
                       'bg-amber-950 text-amber-400 border border-amber-800'
@@ -2809,6 +2809,30 @@ export const DriverWebsite: React.FC = () => {
                     </span>
                   </div>
 
+                  {/* Live KYC Step Updates */}
+                  <div className="grid grid-cols-3 gap-2 text-[10px] text-center bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                    <div className="text-emerald-400 font-bold">
+                      <div>1. Submitted</div>
+                      <div className="text-[9px] text-slate-400 font-normal mt-0.5">✓ Received</div>
+                    </div>
+                    <div className={statusLookupResult.kyc_status === 'PENDING' ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>
+                      <div>2. Admin Audit</div>
+                      <div className="text-[9px] text-slate-400 font-normal mt-0.5">
+                        {statusLookupResult.kyc_status === 'PENDING' ? '⏳ In Review' : '✓ Reviewed'}
+                      </div>
+                    </div>
+                    <div className={
+                      statusLookupResult.kyc_status === 'APPROVED' ? 'text-emerald-400 font-bold' :
+                      statusLookupResult.kyc_status === 'REJECTED' ? 'text-red-400 font-bold' :
+                      'text-slate-500 font-bold'
+                    }>
+                      <div>3. Activation</div>
+                      <div className="text-[9px] text-slate-400 font-normal mt-0.5">
+                        {statusLookupResult.kyc_status === 'APPROVED' ? '✓ Active' : statusLookupResult.kyc_status === 'REJECTED' ? '✕ Action Needed' : 'Waiting'}
+                      </div>
+                    </div>
+                  </div>
+
                   {statusLookupResult.kyc_status === 'APPROVED' && (
                     <div className="p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-emerald-200 space-y-2">
                       <div className="font-black text-emerald-300">
@@ -2816,24 +2840,25 @@ export const DriverWebsite: React.FC = () => {
                       </div>
                       <p className="text-[11px] text-slate-300">
                         Assigned Yellow-Board Vehicle: <strong className="font-mono text-amber-300">{statusLookupResult.assigned_vehicle_reg || statusLookupResult.vehicle_reg || 'Verified by Admin'}</strong>.
-                        Please use the Login ID and Password provided by SJT Admin to sign in.
+                        Please sign in using your registered mobile number and password.
                       </p>
                       <button
                         type="button"
                         onClick={() => {
-                          setLoginIdentifier(statusLookupResult.driver_email || statusLookupResult.driver_phone);
+                          setLoginIdentifier(statusLookupResult.driver_phone || statusLookupResult.driver_email);
                           setAuthMode('LOGIN');
                         }}
-                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs cursor-pointer"
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs cursor-pointer transition"
                       >
-                        Proceed to Chauffeur Sign In →
+                        Proceed to Driver Login →
                       </button>
                     </div>
                   )}
 
                   {statusLookupResult.kyc_status === 'PENDING' && (
-                    <div className="p-3 bg-amber-950/60 border border-amber-500/40 rounded-xl text-amber-200 text-[11px]">
-                      Your application is currently under review by SJT Operations Admin. Once approved, Admin will create your Login ID and Password.
+                    <div className="p-3 bg-amber-950/60 border border-amber-500/40 rounded-xl text-amber-200 text-[11px] space-y-1">
+                      <div className="font-bold text-amber-300">⏳ Verification In Progress</div>
+                      <div>Your documents and vehicle induction application are currently under review by SJT Operations Admin. Once approved, you can log in directly using your mobile number and password.</div>
                     </div>
                   )}
 
@@ -2855,18 +2880,36 @@ export const DriverWebsite: React.FC = () => {
             </div>
           )}
 
-
-          {/* Bottom Card Navigation */}
+          {/* Bottom Card Navigation: Driver Sign In / Partner Induction Button */}
           <div className="pt-4 mt-6 border-t border-slate-800 text-center">
-            <a
-              href="https://sjttarvels.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-400 hover:text-blue-300 font-bold hover:underline inline-flex items-center gap-1.5"
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              <span>🌐 SJT Cabs Customer Website</span>
-            </a>
+            {authMode === 'SIGNUP' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('LOGIN');
+                  setLoginError('');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-xs text-blue-300 hover:text-white font-black transition cursor-pointer inline-flex items-center justify-center gap-2"
+              >
+                <KeyRound className="w-4 h-4 text-blue-400" />
+                <span>Already Registered? Go to Driver Login</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('SIGNUP');
+                  setRegError('');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#ED1735]/20 to-rose-600/20 hover:from-[#ED1735]/30 hover:to-rose-600/30 border border-rose-500/40 text-xs text-rose-200 hover:text-white font-black transition cursor-pointer inline-flex items-center justify-center gap-2"
+              >
+                <Award className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>Driver Sign In • Partner Induction (Upload Documents)</span>
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+              </button>
+            )}
           </div>
 
         </div>
@@ -3009,7 +3052,7 @@ export const DriverWebsite: React.FC = () => {
                 type="button"
                 onClick={handleDriverSignOut}
                 className="hidden sm:flex px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-all cursor-pointer items-center gap-1"
-                title="Switch Chauffeur Profile or Sign Out"
+                title="Switch Driver Profile or Sign Out"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">Logout</span>
@@ -4656,10 +4699,10 @@ export const DriverWebsite: React.FC = () => {
             {/* Welcome banner */}
             <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-[#071B49] rounded-3xl p-6 border border-blue-700/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-xs uppercase font-bold text-blue-300 tracking-wider">Commercial Chauffeur Cockpit</span>
+                <span className="text-xs uppercase font-bold text-blue-300 tracking-wider">Commercial Driver Cockpit</span>
                 <h2 className="text-2xl font-black text-white">Welcome back, {driverName}</h2>
                 <p className="text-xs text-blue-100">
-                  Vehicle: <strong className="text-amber-300 font-mono">{vehicleReg}</strong> ({vehicleType}) • Assigned Chauffeur Partner
+                  Vehicle: <strong className="text-amber-300 font-mono">{vehicleReg}</strong> ({vehicleType}) • Assigned Driver Partner
                 </p>
               </div>
 
@@ -4764,7 +4807,7 @@ export const DriverWebsite: React.FC = () => {
                         `₹${b.quoted_amount ?? b.quotedAmount ?? 0}`,
                         'COMPLETED'
                       ]);
-                      printSectionTable('Chauffeur Completed Rides Ledger', `Driver: ${driverName} • Vehicle: ${vehicleReg}`, headers, rows);
+                      printSectionTable('Driver Completed Rides Ledger', `Driver: ${driverName} • Vehicle: ${vehicleReg}`, headers, rows);
                     }}
                     className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-slate-700 shadow-xs transition-all cursor-pointer"
                   >
@@ -4870,7 +4913,7 @@ export const DriverWebsite: React.FC = () => {
                         `${d.dailyKm ?? d.daily_km ?? 0} KM`,
                         d.status
                       ]);
-                      printSectionTable('Chauffeur Duty & Shift Ledger', `Driver: ${driverName} • Vehicle: ${vehicleReg}`, headers, rows);
+                      printSectionTable('Driver Duty & Shift Ledger', `Driver: ${driverName} • Vehicle: ${vehicleReg}`, headers, rows);
                     }}
                     className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-slate-700 shadow-xs transition-all cursor-pointer"
                   >
@@ -4935,7 +4978,7 @@ export const DriverWebsite: React.FC = () => {
             <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-xl space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div>
-                  <h3 className="text-base font-black text-white">Chauffeur KYC Verification & Compliance Profile</h3>
+                  <h3 className="text-base font-black text-white">Driver KYC Verification & Compliance Profile</h3>
                   <p className="text-xs text-slate-400">RTO driving license, vehicle yellow board registration, and insurance verification</p>
                 </div>
                 <span className={`px-3 py-1 rounded-xl text-xs font-bold border ${
@@ -5383,18 +5426,4 @@ export const DriverWebsite: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* FOOTER */}
-      {/* ============================================================ */}
-      <footer className="bg-[#030c24] text-slate-500 text-xs py-4 border-t border-slate-900 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>© 2026 Sharanajyoti Tours & Travels Pvt. Ltd. • Chauffeur & Commercial Fleet Operating System</span>
-          <div className="flex items-center gap-3">
-            <a href="https://sjttarvels.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
-              Customer Website
-            </a>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-};
+      {/* FOOTER *

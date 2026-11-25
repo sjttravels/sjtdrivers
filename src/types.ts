@@ -231,6 +231,7 @@ export interface DriverKycApplication {
   uidai_aadhar_status?: string;
   police_clearance_status?: string;
   kyc_status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  duty_mode?: string;
   rejection_reason?: string;
   assigned_vehicle_reg?: string;
   submitted_at: string;

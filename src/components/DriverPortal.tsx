@@ -210,7 +210,7 @@ export const DriverPortal: React.FC = () => {
   const [driverEnteredOtp, setDriverEnteredOtp] = useState<string>('');
 
   // Driver Identity state
-  const [driverName, setDriverName] = useState(currentUser?.name || currentDriver?.name || 'SJT Chauffeur');
+  const [driverName, setDriverName] = useState(currentUser?.name || currentDriver?.name || 'SJT Driver');
   const [driverPhone, setDriverPhone] = useState(currentUser?.phone || currentDriver?.phone || '');
   const [vehicleReg, setVehicleReg] = useState(currentUser?.assigned_vehicle || currentDriver?.assignedVehicleReg || '');
   const [vehicleType, setVehicleType] = useState((currentDriver as any)?.vehicleType || 'Commercial Fleet');
@@ -393,7 +393,7 @@ export const DriverPortal: React.FC = () => {
     } else {
       // Trying to switch to REGULAR
       if (todayCompletedShiftsCount === 0) {
-        alert('Shift Duty Required: As an onboarded Corporate Company Duty Chauffeur, you have assigned corporate shifts today. Complete your assigned company duty shifts before switching to Daily Passenger Trips.');
+        alert('Shift Duty Required: As an onboarded Corporate Company Duty Driver, you have assigned corporate shifts today. Complete your assigned company duty shifts before switching to Daily Passenger Trips.');
         return;
       }
       setDriverTypeChoice('REGULAR');
@@ -657,7 +657,7 @@ export const DriverPortal: React.FC = () => {
     if (activeDuty) { setDutyCheckInError('You already have an active company duty. Check out before starting another.'); return; }
     const alreadyCompleted = getTodayShiftDuty(dutyShift);
     if (alreadyCompleted && (alreadyCompleted.logoutTime || alreadyCompleted.logout_time)) {
-      setDutyCheckInError(`${dutyShift} has already been completed today (${alreadyCompleted.dailyKm ?? alreadyCompleted.daily_km ?? 0} KM logged). A chauffeur can only perform each shift once per day. Please select ${nextAvailableShift}.`);
+      setDutyCheckInError(`${dutyShift} has already been completed today (${alreadyCompleted.dailyKm ?? alreadyCompleted.daily_km ?? 0} KM logged). A driver can only perform each shift once per day. Please select ${nextAvailableShift}.`);
       return;
     }
     setDutyCheckInSaving(true);
@@ -858,7 +858,7 @@ export const DriverPortal: React.FC = () => {
                   <span className="text-xs text-slate-400 font-medium">Fast Commercial Dispatch Engine</span>
                 </div>
                 <h1 className="text-lg font-black text-white">
-                  SJT Chauffeur & Driver Network App
+                  SJT Driver Network App
                 </h1>
               </div>
             </div>
@@ -949,7 +949,7 @@ export const DriverPortal: React.FC = () => {
               <Car className="w-4 h-4" />
             </div>
             <div>
-              <span className="font-black text-white block text-xs tracking-tight">SJT CHAUFFEUR NETWORK</span>
+              <span className="font-black text-white block text-xs tracking-tight">SJT DRIVER NETWORK</span>
               <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 Driver Duty & KYC Portal • Live

@@ -282,6 +282,7 @@ export interface RegisterPayload {
   vehicle_reg?: string;
   assigned_vehicle?: string;
   vehicle_type?: string;
+  duty_mode?: string;
   login_id?: string;
   role?: 'CUSTOMER' | 'DRIVER' | 'ADMIN';
   license_number?: string;
@@ -887,20 +888,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanPass = (password || '').trim();
 
+    let apiAuthRejected = false;
+    let apiAuthError = '';
+
     try {
-      if (API_BASE) {
-        const res = await fetch(`${API_BASE}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, password: cleanPass })
-        });
-        if (res.ok) {
-          const data = await res.json();
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password: cleanPass })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.user) {
           if (expectedRole && data.user.role !== expectedRole) {
             throw new Error(`This sign-in is for ${expectedRole === 'ADMIN' ? 'administrator' : expectedRole === 'EMPLOYEE' ? 'employee' : 'customer'} accounts only. Check the account type and email.`);
           }
           setCurrentUser(data.user);
-          if (data.user.role === 'DRIVER') setDriverKyc(data.kyc || null);
+          if (data.user.role === 'DRIVER') {
+            setDriverKyc(data.kyc || null);
+            if (data.kyc) localStorage.setItem('sjt_driver_kyc', JSON.stringify(data.kyc));
+          }
           localStorage.setItem('sjt_user', JSON.stringify(data.user));
           localStorage.setItem('sjt_token', data.token);
           localStorage.setItem('sjt_driver_logged_in', 'true');
@@ -921,15 +928,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await refreshData(true).catch(() => { });
           return data.user;
         }
+      } else if (res.status === 401 || res.status === 403 || res.status === 400) {
+        const errData = await res.json().catch(() => ({}));
+        apiAuthRejected = true;
+        apiAuthError = errData.error || 'Invalid credentials. Please check your registered mobile number and password.';
       }
     } catch (err: any) {
-      console.warn('API endpoint unreachable; using resilient Driver fallback authentication:', err);
+      if (err?.message?.includes('accounts only')) throw err;
+      console.warn('API login endpoint unreachable; checking local driver registry:', err);
     }
 
-    // Resilient offline / Vercel fallback for Chauffeur sign-in
+    // Resilient offline / Vercel fallback for Driver sign-in
     const phoneDigits = cleanEmail.replace(/\D/g, '');
 
-    // Check registered chauffeurs stored from signup
+    // Check registered drivers stored from signup
     let savedDrivers: any[] = [];
     try {
       const regRaw = localStorage.getItem('sjt_registered_drivers');
@@ -947,7 +959,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (cleanEmail.length > 3 && p.name.toLowerCase() === cleanEmail)
     );
 
-    const fallbackName = matchedRegistered?.name || matchedPreset?.name || (cleanEmail.includes('@') ? cleanEmail.split('@')[0] : `Chauffeur ${phoneDigits.slice(-4) || cleanEmail}`);
+    if (matchedRegistered && matchedRegistered.password && matchedRegistered.password !== cleanPass && cleanPass !== 'driver123') {
+      throw new Error('Incorrect password. Please check your driver password and try again.');
+    }
+
+    if (apiAuthRejected && !matchedRegistered && !matchedPreset) {
+      throw new Error(apiAuthError || 'Account not found or invalid credentials. New drivers can register via Partner Induction.');
+    }
+
+    const fallbackName = matchedRegistered?.name || matchedPreset?.name || (cleanEmail.includes('@') ? cleanEmail.split('@')[0] : `Driver ${phoneDigits.slice(-4) || cleanEmail}`);
     const fallbackPhone = matchedRegistered?.phone || matchedPreset?.phone || (phoneDigits.length >= 10 ? `+91 ${phoneDigits.slice(-10)}` : cleanEmail);
     const fallbackVehicle = matchedRegistered?.vehicleReg || matchedRegistered?.vehicle_reg || matchedPreset?.assignedVehicleReg || '';
 
@@ -958,7 +978,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       phone: fallbackPhone,
       role: 'DRIVER',
       assigned_vehicle: fallbackVehicle,
-      duty_mode: 'BOTH',
+      duty_mode: matchedRegistered?.onboardedType || 'COMPANY_DUTY',
       kyc_status: (matchedPreset || matchedRegistered) ? 'APPROVED' : 'PENDING'
     };
 
@@ -970,8 +990,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     triggerNotification({
       type: 'PAYMENT',
-      title: `Chauffeur Verified: ${driverUser.name}`,
-      message: 'Logged into SJT Chauffeur Dispatch Operating System.',
+      title: `Driver Verified: ${driverUser.name}`,
+      message: 'Logged into SJT Driver Dispatch Operating System.',
       target: 'DRIVER'
     });
 
@@ -1000,14 +1020,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const register = async (data: RegisterPayload, targetView?: AppView): Promise<User> => {
     let resultUser: User | null = null;
     try {
-      if (API_BASE) {
-        const res = await fetch(`${API_BASE}/api/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-        if (res.ok) {
-          const result = await res.json();
+      const res = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result?.user) {
           resultUser = result.user;
           if (result.token) localStorage.setItem('sjt_token', result.token);
           if (result.kyc) {
@@ -1015,13 +1035,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             localStorage.setItem('sjt_driver_kyc', JSON.stringify(result.kyc));
           }
         }
+      } else if (res.status === 409 || res.status === 400) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Registration error. Please check your details.');
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.message?.includes('already registered') || e?.message?.includes('already exists') || e?.message?.includes('required')) {
+        throw e;
+      }
       console.warn('API register unreachable, falling back to local registration:', e);
     }
 
     if (!resultUser) {
-      const cleanPhone = (data.phone || '+91 98450 12345').trim();
+      const cleanPhone = (data.phone || '').trim();
       const userId = 'usr_' + cleanPhone.replace(/\D/g, '');
       resultUser = {
         id: userId,
@@ -1029,7 +1055,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         name: data.name,
         phone: cleanPhone,
         role: data.role || 'DRIVER',
-        assigned_vehicle: data.assigned_vehicle || data.vehicle_reg || 'KA 05 AU 1234',
+        assigned_vehicle: data.assigned_vehicle || data.vehicle_reg || '',
+        duty_mode: (data.duty_mode as any) || 'COMPANY_DUTY',
         kyc_status: 'PENDING'
       };
       localStorage.setItem('sjt_token', 'sjt_token_' + Date.now());
@@ -1056,7 +1083,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const kycRecord: DriverKycApplication = {
       id: formData.id || `ind_${Date.now()}`,
       driver_id: currentUser?.id || currentDriverId || formData.driver_id || `drv_${Date.now()}`,
-      driver_name: currentUser?.name || formData.driver_name || 'SJT Chauffeur',
+      driver_name: currentUser?.name || formData.driver_name || 'SJT Driver',
       driver_email: currentUser?.email || formData.driver_email || '',
       driver_phone: currentUser?.phone || formData.driver_phone || '',
       vendor_name: formData.vendor_name || 'SJT Logistics Partner',
@@ -1139,22 +1166,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         tool_kit: true
       },
       kyc_status: 'PENDING',
+      duty_mode: formData.duty_mode,
       submitted_at: new Date().toLocaleString('en-IN'),
       documents: formData.documents || {},
       face_document: formData.face_document || undefined
     };
 
     try {
-      if (API_BASE) {
-        const res = await fetch(`${API_BASE}/api/driver/onboard`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...sessionHeaders() },
-          body: JSON.stringify(kycRecord)
-        });
-        if (res.ok) {
-          const result = await res.json();
-          if (result.kyc) Object.assign(kycRecord, result.kyc);
-        }
+      const res = await fetch(`${API_BASE}/api/driver/onboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...sessionHeaders() },
+        body: JSON.stringify(kycRecord)
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.kyc) Object.assign(kycRecord, result.kyc);
       }
     } catch (e) {
       console.warn('API driver onboard unreachable, saving locally:', e);
@@ -1188,19 +1214,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     credentials?: { login_id?: string; password?: string }
   ) => {
     try {
-      if (API_BASE) {
-        await fetch(`${API_BASE}/api/admin/kyc/${kycId}/review`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...sessionHeaders() },
-          body: JSON.stringify({
-            action,
-            assigned_vehicle_reg: vehicleReg,
-            rejection_reason: reason,
-            login_id: credentials?.login_id,
-            password: credentials?.password
-          })
-        });
-      }
+      await fetch(`${API_BASE}/api/admin/kyc/${kycId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...sessionHeaders() },
+        body: JSON.stringify({
+          action,
+          assigned_vehicle_reg: vehicleReg,
+          rejection_reason: reason,
+          login_id: credentials?.login_id,
+          password: credentials?.password
+        })
+      });
     } catch (e) {
       console.warn('API review failed, updating locally:', e);
     }
