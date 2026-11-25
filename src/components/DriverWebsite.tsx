@@ -5426,4 +5426,18 @@ export const DriverWebsite: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* FOOTER *
+      {/* FOOTER */}
+      {/* ============================================================ */}
+      <footer className="bg-[#030c24] text-slate-500 text-xs py-4 border-t border-slate-900 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>© 2026 Sharanajyoti Tours & Travels Pvt. Ltd. • Driver & Commercial Fleet Operating System</span>
+          <div className="flex items-center gap-3">
+            <a href="https://sjttarvels.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+              Customer Website
+            </a>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
