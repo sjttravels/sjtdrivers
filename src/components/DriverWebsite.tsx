@@ -3415,39 +3415,69 @@ export const DriverWebsite: React.FC = () => {
                 </div>
               </div>
 
-              {/* 12-Document Inspection Checklist */}
+              {/* Submitted Documents Dossier with Live Preview */}
               <div className="space-y-3 pt-2 border-t border-slate-800">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                    <FileCheck className="w-4 h-4 text-emerald-400" />
-                    <span>12 Submitted Documents Dossier (Under Central Audit)</span>
-                  </span>
-                  <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
-                    ✓ All 12 Documents Uploaded
-                  </span>
-                </div>
+                {(() => {
+                  const docLabels: Record<string, string> = {
+                    rc: 'RC Card (Registration)',
+                    insurance: 'Commercial Insurance',
+                    emissions: 'PUC Emission Test',
+                    fitness: 'Fitness Certificate (FC)',
+                    permit: 'Commercial Permit',
+                    road_tax: 'Road Tax Receipt',
+                    vehicle_photo: 'Vehicle Photo',
+                    dl: 'Driving License (Front)',
+                    dl_back: 'Driving License (Back)',
+                    aadhaar: 'Govt ID / Aadhaar',
+                    medical_certificate: 'Medical Certificate',
+                    police_certificate: 'Police Verification',
+                    passport_photo: 'Driver Portrait Photo',
+                    pan: 'PAN Card',
+                    b_extract: 'RTO B-Extract'
+                  };
+                  const docMap = { ...(driverKyc?.documents || {}) } as Record<string, any>;
+                  if (driverKyc?.face_document && !docMap.passport_photo) {
+                    docMap.passport_photo = driverKyc.face_document;
+                  }
+                  const entries = Object.entries(docMap).filter(([, item]) => Boolean(item));
+                  return (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                          <FileCheck className="w-4 h-4 text-emerald-400" />
+                          <span>{entries.length > 0 ? `${entries.length} Submitted Documents Dossier (Under Central Audit)` : 'Submitted Documents Dossier (Under Central Audit)'}</span>
+                        </span>
+                        <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
+                          ✓ {entries.length > 0 ? `${entries.length} Documents Uploaded` : 'Documents Uploaded'}
+                        </span>
+                      </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                  {[
-                    '1. RC Card',
-                    '2. Commercial Insurance',
-                    '3. PUC Emission Test',
-                    '4. Fitness Certificate',
-                    '5. B-Extract',
-                    '6. Tourist Permit',
-                    '7. Road Tax',
-                    '8. Driving License (DL)',
-                    '9. Aadhaar Card',
-                    '10. PAN Card',
-                    '11. Police Clearance',
-                    '12. Passport Photo'
-                  ].map((docName, idx) => (
-                    <div key={idx} className="p-2.5 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center gap-2 text-slate-300">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span className="truncate">{docName}</span>
-                    </div>
-                  ))}
-                </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-[11px]">
+                        {entries.map(([key, item]) => {
+                          const docSrc = item?.data || item?.data_url || item?.url || (item?.storage_key ? `/api/driver/documents/${item.storage_key}` : '');
+                          const label = docLabels[key] || key.replace(/_/g, ' ').toUpperCase();
+                          return (
+                            <div key={key} className="p-2.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-2 text-slate-300">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${item?.status === 'REJECTED' ? 'text-red-400' : 'text-emerald-400'}`} />
+                                <span className="truncate">{label}</span>
+                              </div>
+                              {docSrc && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewingImage({ url: docSrc, title: label })}
+                                  className="px-2 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold shrink-0 cursor-pointer"
+                                >
+                                  View
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Informational Guidance Box */}
@@ -3457,9 +3487,9 @@ export const DriverWebsite: React.FC = () => {
                   <span>How to Unlock Your Duty Dashboard:</span>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  1. <strong>Admin Audit:</strong> SJT Central Operations Admin reviews your 12 uploaded documents in the Admin Portal (<code>http://localhost:3003</code> → <strong>Driver KYC Audit</strong>).<br />
+                  1. <strong>Admin Audit:</strong> SJT Central Operations Admin reviews your uploaded documents in the Admin Portal (<code>sjtadmin.com</code> → <strong>Driver KYC</strong>).<br />
                   2. <strong>One-Click Approval:</strong> Once Admin clicks <em>"Approve KYC & Activate Driver"</em>, your duty dashboard will be automatically unlocked.<br />
-                  3. <strong>Your Password:</strong> You will log in using your registered mobile number: <strong className="text-white">{driverPhone}</strong> and the secret password you created during signup. No password creation by Admin is required.<br />
+                  3. <strong>Your Password:</strong> You will log in using your registered mobile number: <strong className="text-white">{driverPhone}</strong> and the secret password you created during signup.<br />
                   4. <strong>Live Unlock:</strong> Click the <strong>"Check & Refresh Status"</strong> button above at any time to verify if Admin has approved your dossier.
                 </p>
               </div>
