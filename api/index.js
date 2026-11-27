@@ -117,6 +117,25 @@ function parseLocationDetails(row) {
 }
 
 // Convert row keys to both snake_case and camelCase
+function normalizeKycRecord(row) {
+  if (!row) return null;
+  const vd = (row.vehicle_details && typeof row.vehicle_details === 'object') ? row.vehicle_details : {};
+  const docs = (row.documents && typeof row.documents === 'object') ? row.documents : {};
+  const faceDoc = row.face_document || docs.passport_photo || null;
+  return {
+    ...vd,
+    ...row,
+    vehicle_details: vd,
+    documents: docs,
+    face_document: faceDoc,
+    live_face_photo_url: row.live_face_photo_url || faceDoc?.data || faceDoc?.data_url || docs.passport_photo?.data || null,
+    license_doc_url: row.license_doc_url || docs.dl?.data || docs.dl?.data_url || null,
+    duty_mode: row.duty_mode || vd.duty_mode || null,
+    vehicle_model: row.vehicle_model || vd.vehicle_model || vd.make_model || '',
+    seating_capacity: row.seating_capacity || vd.seating_capacity || vd.seats || ''
+  };
+}
+
 function formatBooking(row) {
   if (!row) return null;
   const b = { ...row };
@@ -1466,13 +1485,19 @@ export default async function handler(req, res) {
 
       let kycRow = null;
       if (userRow.role === 'DRIVER') {
+        const userDigits = String(userRow.phone || '').replace(/\D/g, '').slice(-10);
         const kycRes = await db.query(
-          'SELECT * FROM driver_kyc WHERE driver_id::text = $1 OR LOWER(driver_email) = LOWER($2) ORDER BY submitted_at DESC LIMIT 1',
-          [String(userRow.id), String(userRow.email)]
+          `SELECT * FROM driver_kyc
+           WHERE driver_id::text = $1
+              OR LOWER(driver_email) = LOWER($2)
+              OR ($3 <> '' AND REPLACE(driver_phone, ' ', '') LIKE '%' || $3)
+           ORDER BY submitted_at DESC LIMIT 1`,
+          [String(userRow.id), String(userRow.email), userDigits]
         );
-        kycRow = kycRes.rows[0] || null;
+        kycRow = normalizeKycRecord(kycRes.rows[0] || null);
       }
 
+      const effectiveKycStatus = kycRow?.kyc_status || userRow.kyc_status || 'NOT_SUBMITTED';
       const token = signTokenPayload({ id: userRow.id, email: userRow.email, role: userRow.role, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 });
       return res.status(200).json({
         message: 'Login successful',
@@ -1484,28 +1509,56 @@ export default async function handler(req, res) {
           phone: userRow.phone,
           role: userRow.role,
           assigned_vehicle: userRow.assigned_vehicle || kycRow?.assigned_vehicle_reg || kycRow?.vehicle_reg || null,
-          duty_mode: userRow.duty_mode || kycRow?.vehicle_details?.duty_mode || 'COMPANY_DUTY',
-          kyc_status: kycRow ? kycRow.kyc_status : (userRow.kyc_status || 'NOT_SUBMITTED')
+          duty_mode: userRow.duty_mode || kycRow?.duty_mode || 'COMPANY_DUTY',
+          kyc_status: effectiveKycStatus
         },
         kyc: kycRow
       });
     }
 
-    // 20d. Driver KYC Status (Authenticated): GET /api/driver/kyc-status
+    // 20d. Driver KYC Status: GET /api/driver/kyc-status
     if (pathname === '/api/driver/kyc-status' && method === 'GET') {
+      const qs = new URLSearchParams(search || '');
       const authHeader = String(req.headers?.authorization || '');
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
       const payload = verifyTokenPayload(token);
-      if (!payload?.id) {
+
+      const lookupId = String(payload?.id || qs.get('driver_id') || '').trim();
+      const lookupEmail = String(payload?.email || qs.get('email') || '').trim().toLowerCase();
+      const lookupPhoneDigits = String(qs.get('phone') || '').replace(/\D/g, '').slice(-10);
+
+      if (!lookupId && !lookupEmail && !lookupPhoneDigits) {
         return res.status(200).json({ kyc_status: 'NOT_SUBMITTED', kyc: null });
       }
+
       const kycRes = await db.query(
-        'SELECT * FROM driver_kyc WHERE driver_id::text = $1 OR LOWER(driver_email) = LOWER($2) ORDER BY submitted_at DESC LIMIT 1',
-        [String(payload.id), String(payload.email || '')]
+        `SELECT * FROM driver_kyc
+         WHERE ($1 <> '' AND driver_id::text = $1)
+            OR ($2 <> '' AND LOWER(driver_email) = $2)
+            OR ($3 <> '' AND REPLACE(driver_phone, ' ', '') LIKE '%' || $3)
+         ORDER BY submitted_at DESC LIMIT 1`,
+        [lookupId, lookupEmail, lookupPhoneDigits]
       );
-      const kyc = kycRes.rows[0] || null;
+      let kyc = normalizeKycRecord(kycRes.rows[0] || null);
+
+      const userRes = await db.query(
+        `SELECT id, kyc_status, assigned_vehicle, duty_mode FROM users
+         WHERE ($1 <> '' AND id::text = $1)
+            OR ($2 <> '' AND LOWER(email) = $2)
+            OR ($3 <> '' AND REPLACE(phone, ' ', '') LIKE '%' || $3)
+         LIMIT 1`,
+        [lookupId, lookupEmail, lookupPhoneDigits]
+      );
+      const userRow = userRes.rows[0] || null;
+      const effectiveStatus = kyc?.kyc_status || userRow?.kyc_status || 'NOT_SUBMITTED';
+      if (kyc && userRow?.kyc_status === 'APPROVED' && kyc.kyc_status !== 'APPROVED') {
+        kyc = { ...kyc, kyc_status: 'APPROVED', assigned_vehicle_reg: kyc.assigned_vehicle_reg || userRow.assigned_vehicle || kyc.vehicle_reg };
+      }
+
       return res.status(200).json({
-        kyc_status: kyc?.kyc_status || 'NOT_SUBMITTED',
+        kyc_status: effectiveStatus,
+        assigned_vehicle: kyc?.assigned_vehicle_reg || userRow?.assigned_vehicle || kyc?.vehicle_reg || null,
+        duty_mode: kyc?.duty_mode || userRow?.duty_mode || null,
         kyc
       });
     }
@@ -1563,14 +1616,46 @@ export default async function handler(req, res) {
       const aadharNumber = body.aadhaar_number || body.aadhar_number || body.aadhaar || '';
       const vehiclePref = body.vehicle_preference || body.vehicle_type || 'Commercial Fleet';
       const dutyMode = body.duty_mode || body.onboarded_type || body.vehicle_details?.duty_mode || 'COMPANY_DUTY';
+      const docsObj = body.documents || {};
+      const faceDocObj = body.face_document || docsObj.passport_photo || null;
+
       const vehicleDetailsObj = {
         ...(body.vehicle_details || {}),
         reg: vehicleReg,
         type: body.vehicle_type || 'Commercial Fleet',
+        make_model: body.vehicle_model || body.make_model || body.vehicle_details?.make_model || '',
+        vehicle_model: body.vehicle_model || body.make_model || body.vehicle_details?.vehicle_model || '',
+        year: body.year || body.vehicle_details?.year || '',
+        color: body.color || body.vehicle_details?.color || '',
+        seats: body.seating_capacity || body.seats || body.vehicle_details?.seats || '',
+        seating_capacity: body.seating_capacity || body.seats || body.vehicle_details?.seating_capacity || '',
+        vehicle_ownership: body.vehicle_ownership || body.vehicle_details?.vehicle_ownership || 'ATTACHED',
+        fuel_type: body.fuel_type || body.vehicle_details?.fuel_type || 'Diesel',
+        vendor_name: body.vendor_name || body.vehicle_vendor_name || '',
+        father_name: body.father_name || '',
+        dob: body.dob || '',
+        education: body.education || '',
+        inducted_date: body.inducted_date || '',
+        duties_per_day: body.duties_per_day || '',
+        companies_serving: body.companies_serving || '',
+        emergency_contact_name: body.emergency_contact_name || '',
+        emergency_contact_phone: body.emergency_contact_phone || '',
+        reference_1_name: body.reference_1_name || '',
+        reference_1_phone: body.reference_1_phone || '',
+        reference_2_name: body.reference_2_name || '',
+        reference_2_phone: body.reference_2_phone || '',
+        bgv_agency_name: body.bgv_agency_name || '',
+        accessories: body.accessories || null,
+        vehicle_condition: body.vehicle_condition || null,
+        inspected_by: body.inspected_by || '',
+        approved_by: body.approved_by || '',
         duty_mode: dutyMode
       };
       const vehicleDetails = JSON.stringify(vehicleDetailsObj);
-      const documentsJson = JSON.stringify(body.documents || {});
+      const documentsJson = JSON.stringify(docsObj);
+      const faceDocJson = faceDocObj ? JSON.stringify(faceDocObj) : null;
+      const liveFaceUrl = faceDocObj?.data || docsObj.passport_photo?.data || null;
+      const licenseDocUrl = docsObj.dl?.data || null;
 
       try {
         const existing = await db.query(
@@ -1581,32 +1666,41 @@ export default async function handler(req, res) {
           await db.query(`
             UPDATE driver_kyc SET
               driver_name = $1, driver_phone = $2, license_number = $3,
-              aadhar_number = $4, vehicle_reg = $5, vehicle_type = $6,
-              documents = $7::jsonb, vehicle_details = $8::jsonb,
+              aadhar_number = $4, pan_number = $5, experience_years = $6, address = $7,
+              vehicle_reg = $8, vehicle_type = $9,
+              documents = $10::jsonb, vehicle_details = $11::jsonb,
+              face_document = $12::jsonb, live_face_photo_url = COALESCE($13, live_face_photo_url),
+              license_doc_url = COALESCE($14, license_doc_url),
               kyc_status = 'PENDING', submitted_at = NOW()
-            WHERE id = $9
+            WHERE id = $15
           `, [
             driverName, driverPhone, body.license_number || '',
-            aadharNumber, vehicleReg, body.vehicle_type || 'Commercial Fleet',
-            documentsJson, vehicleDetails, existing.rows[0].id
+            aadharNumber, body.pan_number || '', Number(body.experience_years) || 0, body.address || '',
+            vehicleReg, body.vehicle_type || 'Commercial Fleet',
+            documentsJson, vehicleDetails, faceDocJson, liveFaceUrl, licenseDocUrl, existing.rows[0].id
           ]);
         } else {
           await db.query(`
             INSERT INTO driver_kyc (
               id, driver_id, driver_name, driver_phone, driver_email,
-              license_number, aadhar_number, vehicle_preference, vehicle_reg, vehicle_type,
-              documents, vehicle_details, kyc_status, submitted_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, 'PENDING', NOW())
+              license_number, aadhar_number, pan_number, experience_years, address,
+              vehicle_preference, vehicle_reg, vehicle_type,
+              documents, vehicle_details, face_document, live_face_photo_url, license_doc_url,
+              kyc_status, submitted_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16::jsonb, $17, $18, 'PENDING', NOW())
           `, [
             kycId, driverId, driverName, driverPhone, driverEmail,
-            body.license_number || '', aadharNumber, vehiclePref, vehicleReg,
-            body.vehicle_type || 'Commercial Fleet', documentsJson, vehicleDetails
+            body.license_number || '', aadharNumber, body.pan_number || '', Number(body.experience_years) || 0, body.address || '',
+            vehiclePref, vehicleReg, body.vehicle_type || 'Commercial Fleet',
+            documentsJson, vehicleDetails, faceDocJson, liveFaceUrl, licenseDocUrl
           ]);
         }
 
+        const phoneDigits = String(driverPhone || '').replace(/\D/g, '').slice(-10);
         await db.query(
-          'UPDATE users SET kyc_status = $1, assigned_vehicle = COALESCE(NULLIF($2, \'\'), assigned_vehicle), duty_mode = $3 WHERE id::text = $4 OR LOWER(email) = LOWER($5)',
-          ['PENDING', vehicleReg, dutyMode, String(driverId), String(driverEmail)]
+          `UPDATE users SET kyc_status = $1, assigned_vehicle = COALESCE(NULLIF($2, ''), assigned_vehicle), duty_mode = $3
+           WHERE id::text = $4 OR LOWER(email) = LOWER($5) OR ($6 <> '' AND REPLACE(phone, ' ', '') LIKE '%' || $6)`,
+          ['PENDING', vehicleReg, dutyMode, String(driverId), String(driverEmail), phoneDigits]
         );
       } catch (err) {
         console.warn('driver_kyc table insert warning:', err.message);
@@ -1615,7 +1709,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         success: true,
         message: 'Driver induction dossier submitted successfully for admin review.',
-        kyc: {
+        kyc: normalizeKycRecord({
           id: kycId,
           driver_id: driverId,
           driver_name: driverName,
@@ -1623,18 +1717,21 @@ export default async function handler(req, res) {
           driver_email: driverEmail,
           vehicle_reg: vehicleReg,
           vehicle_type: body.vehicle_type || 'Commercial Fleet',
+          vehicle_details: vehicleDetailsObj,
+          documents: docsObj,
+          face_document: faceDocObj,
           duty_mode: dutyMode,
           kyc_status: 'PENDING',
           submitted_at: new Date().toISOString()
-        }
+        })
       });
     }
 
     // 22. Admin KYC Requests: GET /api/admin/kyc-requests
     if (pathname === '/api/admin/kyc-requests' && method === 'GET') {
       try {
-        const q = await db.query('SELECT * FROM driver_kyc ORDER BY submitted_at DESC LIMIT 50');
-        if (q.rows.length > 0) return res.status(200).json(q.rows);
+        const q = await db.query('SELECT * FROM driver_kyc ORDER BY submitted_at DESC LIMIT 100');
+        return res.status(200).json(q.rows.map(normalizeKycRecord));
       } catch (_) {}
       return res.status(200).json([]);
     }
@@ -1643,23 +1740,73 @@ export default async function handler(req, res) {
     if (pathname.startsWith('/api/admin/kyc/') && pathname.endsWith('/review') && method === 'POST') {
       const kycId = pathname.replace('/api/admin/kyc/', '').replace('/review', '');
       const body = await parseBody(req);
-      const action = body.action || 'APPROVE';
+      const action = String(body.action || 'APPROVE').toUpperCase();
       const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
       const assignedVehicle = body.assigned_vehicle_reg || body.vehicle_reg || null;
+      const reason = status === 'APPROVED' ? null : (body.rejection_reason || body.reason || 'Documents failed RTO verification standards.');
       try {
+        const existingRes = await db.query('SELECT * FROM driver_kyc WHERE id::text = $1 OR driver_id::text = $1 LIMIT 1', [kycId]);
+        const existing = existingRes.rows[0];
+        let docs = (existing?.documents && typeof existing.documents === 'object') ? { ...existing.documents } : {};
+        let faceDoc = (existing?.face_document && typeof existing.face_document === 'object') ? { ...existing.face_document } : (docs.passport_photo ? { ...docs.passport_photo } : null);
+        if (status === 'APPROVED') {
+          for (const key of Object.keys(docs)) {
+            if (docs[key] && typeof docs[key] === 'object') {
+              docs[key] = { ...docs[key], status: 'APPROVED' };
+            }
+          }
+          if (faceDoc) faceDoc = { ...faceDoc, status: 'APPROVED' };
+        }
         const kycRes = await db.query(
-          'UPDATE driver_kyc SET kyc_status = $1, rejection_reason = $2, assigned_vehicle_reg = COALESCE($3, assigned_vehicle_reg, vehicle_reg), verified_at = NOW() WHERE id::text = $4 OR driver_id::text = $4 RETURNING *',
-          [status, body.rejection_reason || body.reason || null, assignedVehicle, kycId]
+          `UPDATE driver_kyc SET
+            kyc_status = $1,
+            rejection_reason = $2,
+            assigned_vehicle_reg = COALESCE($3, assigned_vehicle_reg, vehicle_reg),
+            documents = $4::jsonb,
+            face_document = COALESCE($5::jsonb, face_document),
+            verified_at = NOW()
+           WHERE id::text = $6 OR driver_id::text = $6 RETURNING *`,
+          [status, reason, assignedVehicle, JSON.stringify(docs), faceDoc ? JSON.stringify(faceDoc) : null, kycId]
         );
         const updatedKyc = kycRes.rows[0];
         if (updatedKyc) {
+          const phoneDigits = String(updatedKyc.driver_phone || '').replace(/\D/g, '').slice(-10);
           await db.query(
-            'UPDATE users SET kyc_status = $1, assigned_vehicle = COALESCE($2, assigned_vehicle) WHERE id::text = $3 OR LOWER(email) = LOWER($4)',
-            [status, assignedVehicle || updatedKyc.vehicle_reg || null, String(updatedKyc.driver_id || ''), String(updatedKyc.driver_email || '')]
+            `UPDATE users SET kyc_status = $1, assigned_vehicle = COALESCE($2, assigned_vehicle)
+             WHERE id::text = $3 OR LOWER(email) = LOWER($4) OR ($5 <> '' AND REPLACE(phone, ' ', '') LIKE '%' || $5)`,
+            [status, assignedVehicle || updatedKyc.assigned_vehicle_reg || updatedKyc.vehicle_reg || null, String(updatedKyc.driver_id || ''), String(updatedKyc.driver_email || ''), phoneDigits]
           );
+          return res.status(200).json({ success: true, status, kyc: normalizeKycRecord(updatedKyc) });
         }
-      } catch (_) {}
+      } catch (err) {
+        return res.status(500).json({ error: err.message || 'Failed to update KYC review.' });
+      }
       return res.status(200).json({ success: true, status });
+    }
+
+    // 23b. Admin Individual Document Review: POST /api/admin/kyc/:id/document-review
+    if (pathname.startsWith('/api/admin/kyc/') && pathname.endsWith('/document-review') && method === 'POST') {
+      const kycId = pathname.replace('/api/admin/kyc/', '').replace('/document-review', '');
+      const body = await parseBody(req);
+      const docKey = String(body.document_key || '').trim();
+      const docStatus = String(body.action || 'APPROVE').toUpperCase() === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+      if (!docKey) return res.status(400).json({ error: 'document_key is required.' });
+      const existingRes = await db.query('SELECT * FROM driver_kyc WHERE id::text = $1 OR driver_id::text = $1 LIMIT 1', [kycId]);
+      const existing = existingRes.rows[0];
+      if (!existing) return res.status(404).json({ error: 'KYC record not found.' });
+      const docs = { ...(existing.documents || {}) };
+      let faceDoc = existing.face_document ? { ...existing.face_document } : null;
+      if (docKey === 'face' || docKey === 'passport_photo') {
+        faceDoc = { ...(faceDoc || docs.passport_photo || { file_name: 'passport_photo.jpg' }), status: docStatus };
+        if (docs.passport_photo) docs.passport_photo = { ...docs.passport_photo, status: docStatus };
+      } else {
+        docs[docKey] = { ...(docs[docKey] || { file_name: `${docKey}.jpg` }), status: docStatus };
+      }
+      const upd = await db.query(
+        'UPDATE driver_kyc SET documents = $1::jsonb, face_document = COALESCE($2::jsonb, face_document) WHERE id = $3 RETURNING *',
+        [JSON.stringify(docs), faceDoc ? JSON.stringify(faceDoc) : null, existing.id]
+      );
+      return res.status(200).json({ success: true, kyc: normalizeKycRecord(upd.rows[0]) });
     }
 
     // Fallback for unmatched API routes

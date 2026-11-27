@@ -706,7 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const employeePermissions = currentUser?.permissions || [];
       const canAccess = (permission: string) => isAdmin || (isEmployee && employeePermissions.includes(permission));
       const shouldFetchFull = !silent;
-      const [vRes, bRes, dRes, sRes, invRes, kycRes, drvRes, empRes, revRes, attRes, txRes, accRes] = await Promise.all([
+      const [vRes, bRes, dRes, sRes, invRes, kycRes, drvRes, empRes, revRes, attRes, txRes, accRes, driverKycRes] = await Promise.all([
         shouldFetchFull ? fetch(`${API_BASE}/api/vehicles`).catch(() => null) : Promise.resolve(null),
         fetch(bookingsUrl, { headers: sessionHeaders() }).catch(() => null),
         fetch(`${API_BASE}/api/duties`, { headers: sessionHeaders() }).catch(() => null),
@@ -727,7 +727,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         shouldFetchFull && hasSession && canAccess('accounts')
           ? fetch(`${API_BASE}/api/accounts/transactions`, { headers: sessionHeaders() }).catch(() => null) : Promise.resolve(null),
         shouldFetchFull && hasSession && canAccess('accounts')
-          ? fetch(`${API_BASE}/api/accounts/summary`, { headers: sessionHeaders() }).catch(() => null) : Promise.resolve(null)
+          ? fetch(`${API_BASE}/api/accounts/summary`, { headers: sessionHeaders() }).catch(() => null) : Promise.resolve(null),
+        isDriver && currentUser
+          ? fetch(`${API_BASE}/api/driver/kyc-status?${new URLSearchParams({
+              ...(currentUser.id ? { driver_id: String(currentUser.id) } : {}),
+              ...(currentUser.email ? { email: String(currentUser.email) } : {}),
+              ...(currentUser.phone ? { phone: String(currentUser.phone) } : {})
+            }).toString()}`, { headers: sessionHeaders() }).catch(() => null)
+          : Promise.resolve(null)
       ]);
 
       if (vRes && vRes.ok) {
@@ -857,6 +864,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const accData = await accRes.json();
         setAccountsSummary(accData);
       }
+
+      if (driverKycRes && driverKycRes.ok) {
+        const kData = await driverKycRes.json();
+        const kRecord = kData.kyc || null;
+        if (kRecord) {
+          setDriverKyc(kRecord);
+          try { localStorage.setItem('sjt_driver_kyc', JSON.stringify(kRecord)); } catch { }
+        }
+        const effectiveStatus = kRecord?.kyc_status || kData.kyc_status;
+        if (effectiveStatus) {
+          setCurrentUser(prev => {
+            if (!prev || prev.role !== 'DRIVER') return prev;
+            const nextVeh = kRecord?.assigned_vehicle_reg || kRecord?.vehicle_reg || kData.assigned_vehicle || prev.assigned_vehicle;
+            if (prev.kyc_status === effectiveStatus && prev.assigned_vehicle === nextVeh) return prev;
+            const nextUser = { ...prev, kyc_status: effectiveStatus as any, assigned_vehicle: nextVeh };
+            try { localStorage.setItem('sjt_user', JSON.stringify(nextUser)); } catch { }
+            return nextUser;
+          });
+        }
+      }
     } catch (err) {
       console.error('Error fetching live data from the SJT backend:', err);
     } finally {
@@ -866,11 +893,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshDriverKyc = async (): Promise<DriverKycApplication | null> => {
     if (currentUser?.role !== 'DRIVER') return null;
-    const res = await fetch(`${API_BASE}/api/driver/kyc-status`, { headers: sessionHeaders() });
+    const qs = new URLSearchParams({
+      ...(currentUser.id ? { driver_id: String(currentUser.id) } : {}),
+      ...(currentUser.email ? { email: String(currentUser.email) } : {}),
+      ...(currentUser.phone ? { phone: String(currentUser.phone) } : {})
+    }).toString();
+    const res = await fetch(`${API_BASE}/api/driver/kyc-status?${qs}`, { headers: sessionHeaders() });
     if (!res.ok) throw new Error((await res.json()).error || 'Could not load driver verification status.');
     const data = await res.json();
-    const record = data.kyc || null;
-    setDriverKyc(record);
+    let record: any = data.kyc || null;
+    if (!record && (currentUser.phone || currentUser.email)) {
+      const lookupRes = await fetch(`${API_BASE}/api/driver/kyc-lookup?identifier=${encodeURIComponent(currentUser.phone || currentUser.email)}`).catch(() => null);
+      if (lookupRes && lookupRes.ok) {
+        record = await lookupRes.json();
+      }
+    }
+    if (record) {
+      setDriverKyc(record);
+      try { localStorage.setItem('sjt_driver_kyc', JSON.stringify(record)); } catch { }
+    }
+    const nextStatus = record?.kyc_status || data.kyc_status;
+    if (nextStatus) {
+      setCurrentUser(prev => {
+        if (!prev || prev.role !== 'DRIVER') return prev;
+        const nextVeh = record?.assigned_vehicle_reg || record?.vehicle_reg || data.assigned_vehicle || prev.assigned_vehicle;
+        const nextUser = { ...prev, kyc_status: nextStatus as any, assigned_vehicle: nextVeh };
+        try { localStorage.setItem('sjt_user', JSON.stringify(nextUser)); } catch { }
+        return nextUser;
+      });
+    }
     return record;
   };
 

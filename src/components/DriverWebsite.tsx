@@ -3356,9 +3356,22 @@ export const DriverWebsite: React.FC = () => {
                   <button
                     type="button"
                     onClick={async () => {
-                      await refreshDriverKyc();
-                      await refreshData(true);
-                      alert('Refreshed verification status. If Admin has approved in Admin Panel, your dashboard is now unlocked.');
+                      try {
+                        const updated = await refreshDriverKyc();
+                        await refreshData(true);
+                        const status = String(updated?.kyc_status || '').toUpperCase();
+                        if (status === 'APPROVED') {
+                          const targetMode = String((updated as any)?.duty_mode || currentUser?.duty_mode || '').toUpperCase();
+                          setActiveTab(targetMode === 'DAILY_TRIPS' ? 'TRIPS' : 'SHIFTS');
+                          alert('Your KYC & Vehicle documents are APPROVED! Your Duty Dashboard is now unlocked.');
+                        } else if (status === 'REJECTED') {
+                          alert(`Your KYC needs correction: ${updated?.rejection_reason || 'Please check with Admin Desk and re-submit.'}`);
+                        } else {
+                          alert('Your KYC dossier is still under Admin verification. Once Admin approves in Admin Panel, click Check & Refresh Status again to unlock.');
+                        }
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : 'Could not refresh verification status.');
+                      }
                     }}
                     className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition cursor-pointer flex items-center gap-2"
                   >
@@ -5038,6 +5051,108 @@ export const DriverWebsite: React.FC = () => {
                   <strong className="text-sm font-bold text-white">Bengaluru Commercial Hub</strong>
                 </div>
               </div>
+
+              {/* Uploaded KYC & Vehicle Documents Viewer */}
+              <div className="pt-4 border-t border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-black text-white">Uploaded KYC & Vehicle Documents</h4>
+                    <p className="text-[11px] text-slate-400">Preview your submitted images and PDFs along with Admin verification status</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => refreshDriverKyc().catch(() => {})}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Refresh Docs</span>
+                  </button>
+                </div>
+
+                {(() => {
+                  const docLabels: Record<string, string> = {
+                    rc: 'RC Card (Registration Certificate)',
+                    insurance: 'Commercial Insurance Policy',
+                    emissions: 'Emission / Pollution Test (PUC)',
+                    fitness: 'Fitness Certificate (FC)',
+                    permit: 'Commercial Permit',
+                    road_tax: 'Road Tax Receipt',
+                    vehicle_photo: 'Vehicle Photograph',
+                    dl: 'Driving License (Front)',
+                    dl_back: 'Driving License (Back)',
+                    aadhaar: 'Government ID / Aadhaar Card',
+                    medical_certificate: 'Medical Fitness Certificate',
+                    police_certificate: 'Police Verification Certificate',
+                    passport_photo: 'Driver Passport Photo',
+                    pan: 'PAN Card',
+                    b_extract: 'RTO B-Extract'
+                  };
+                  const docMap = { ...(driverKyc?.documents || {}) } as Record<string, any>;
+                  if (driverKyc?.face_document && !docMap.passport_photo) {
+                    docMap.passport_photo = driverKyc.face_document;
+                  }
+                  const entries = Object.entries(docMap).filter(([, item]) => Boolean(item));
+                  if (entries.length === 0) {
+                    return (
+                      <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-400">
+                        No uploaded document files attached to your active KYC record yet.
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {entries.map(([key, item]) => {
+                        const docSrc = item?.data || item?.data_url || item?.url || (item?.storage_key ? `/api/driver/documents/${item.storage_key}` : '');
+                        const isImg = docSrc.startsWith('data:image') || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(docSrc);
+                        const isPdf = docSrc.startsWith('data:application/pdf') || /\.pdf(\?|$)/i.test(docSrc) || /\.pdf$/i.test(item?.file_name || '');
+                        const label = docLabels[key] || key.replace(/_/g, ' ').toUpperCase();
+                        return (
+                          <div key={key} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              {isImg ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewingImage({ url: docSrc, title: label })}
+                                  className="w-11 h-11 rounded-xl overflow-hidden border border-slate-700 shrink-0 cursor-pointer hover:border-blue-400 transition"
+                                >
+                                  <img src={docSrc} alt={label} className="w-full h-full object-cover" />
+                                </button>
+                              ) : (
+                                <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 text-[10px] font-black text-blue-300">
+                                  {isPdf ? 'PDF' : 'DOC'}
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-bold text-white truncate">{label}</div>
+                                <div className="text-[10px] text-slate-400 truncate">{item?.file_name || 'Uploaded document'}</div>
+                                <span className={`inline-block mt-1 text-[9px] font-black px-1.5 py-0.5 rounded ${
+                                  item?.status === 'APPROVED' || isApprovedDriver
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : item?.status === 'REJECTED'
+                                      ? 'bg-red-500/20 text-red-300'
+                                      : 'bg-amber-500/20 text-amber-300'
+                                }`}>
+                                  {item?.status || (isApprovedDriver ? 'APPROVED' : 'PENDING')}
+                                </span>
+                              </div>
+                            </div>
+                            {docSrc && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewingImage({ url: docSrc, title: label })}
+                                className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>View</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         )}
@@ -5196,13 +5311,22 @@ export const DriverWebsite: React.FC = () => {
               </button>
             </div>
             <div className="flex items-center justify-center bg-slate-950 rounded-2xl p-3 border border-slate-800 min-h-[300px] max-h-[70vh] overflow-auto">
-              {previewingImage.url.startsWith('data:image') || previewingImage.url.endsWith('.jpg') || previewingImage.url.endsWith('.png') ? (
+              {previewingImage.url.startsWith('data:image') || /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(previewingImage.url) ? (
                 <img src={previewingImage.url} alt={previewingImage.title} className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-lg" />
               ) : (
                 <iframe src={previewingImage.url} title={previewingImage.title} className="w-full h-[60vh] border rounded-xl bg-white" />
               )}
             </div>
-            <div className="flex justify-end pt-1">
+            <div className="flex items-center justify-between pt-1">
+              <a
+                href={previewingImage.url}
+                download={previewingImage.title || 'sjt-kyc-document'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition"
+              >
+                Download / Open File
+              </a>
               <button
                 type="button"
                 onClick={() => setPreviewingImage(null)}
